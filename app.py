@@ -71,37 +71,6 @@ def index():
     """
     return "Re:find is running."
 
-# ============================
-# DB接続テスト（確認後に削除する）
-# ============================
-@app.route("/test-db")
-def test_db():
-    try:
-        # ① カテゴリを追加
-        supabase_admin.table("categories").insert({
-            "line_user_id": "test_user",
-            "name": "テストカテゴリ"
-        }).execute()
-
-        # ② カテゴリを取得
-        result = supabase_admin.table("categories") \
-            .select("*") \
-            .eq("line_user_id", "test_user") \
-            .execute()
-
-        # ③ テストデータを削除
-        supabase_admin.table("categories") \
-            .delete() \
-            .eq("line_user_id", "test_user") \
-            .execute()
-
-        # ④ 結果を表示
-        return f"成功！取得データ: {result.data}"
-    except Exception as e:
-        return f"エラー: {e}"
-
-
-
 @app.route("/callback", methods=["POST"])
 def callback():
     """
