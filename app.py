@@ -2,9 +2,10 @@
 # Re:find - LINE Bot Webhook サーバー
 # ============================================
 # LINEに送ったメッセージをFlaskで受け取り、
-# オウム返しで返信するテスト用コード
+# AIで分類した結果を返信するコード
 
 import os  # 環境変数を読み込むためのライブラリ
+from dotenv import load_dotenv  # .env を読むため
 from flask import Flask, request, abort  # Webサーバーの基本機能
 
 # --- LINE Bot SDK の必要なパーツを読み込む ---
@@ -14,12 +15,20 @@ from linebot.v3.messaging import (
     ApiClient,              # LINE APIと通信するためのクライアント
     MessagingApi,           # メッセージ送受信の機能
     ReplyMessageRequest,    # 返信メッセージのリクエスト
-    TextMessage             # テキストメッセージ
+    TextMessage,            # テキストメッセージ
 )
 from linebot.v3.webhooks import (
     MessageEvent,           # 「メッセージが届いた」というイベント
-    TextMessageContent      # テキストメッセージの中身
+    TextMessageContent,     # テキストメッセージの中身
 )
+from linebot.v3.exceptions import InvalidSignatureError  # 署名エラー用
+
+from ai_classifier import classify_text  # ← さっき作った共通関数
+
+# ============================================
+# .env 読み込み（ローカル開発用）
+# ============================================
+load_dotenv()
 
 # ============================================
 # Flaskアプリの初期化
@@ -29,12 +38,16 @@ app = Flask(__name__)
 # ============================================
 # LINE Bot の設定
 # ============================================
-# Renderの環境変数から秘密情報を読み込む
-# （コードに直接書かないのがセキュリティのポイント！）
-configuration = Configuration(
-    access_token=os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
-)
-handler = WebhookHandler(os.environ.get("LINE_CHANNEL_SECRET"))
+channel_access_token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+channel_secret = os.environ.get("LINE_CHANNEL_SECRET")
+
+if not channel_access_token or not channel_secret:
+    raise RuntimeError(
+        "LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN が設定されていません"
+    )
+
+configuration = Configuration(access_token=channel_access_token)
+handler = WebhookHandler(channel_secret)
 
 # ============================================
 # ルート（URL）の設定
@@ -44,7 +57,6 @@ handler = WebhookHandler(os.environ.get("LINE_CHANNEL_SECRET"))
 def index():
     """
     トップページ（動作確認用）
-    ブラウザで https://re-find.onrender.com/ にアクセスすると表示される
     """
     return "Re:find is running."
 
@@ -53,57 +65,64 @@ def index():
 def callback():
     """
     LINEからのWebhook（通知）を受け取る入口
-    - LINEでメッセージを送ると、LINEサーバーがこのURLにデータを送ってくる
-    - 正しいリクエストかどうかを signature（署名）で検証する
     """
-    # ① リクエストヘッダーから署名を取得（本物のLINEからか確認するため）
-    signature = request.headers["X-Line-Signature"]
+    # ① リクエストヘッダーから署名を取得
+    signature = request.headers.get("X-Line-Signature", "")
 
     # ② リクエストの本文（メッセージデータ）を取得
     body = request.get_data(as_text=True)
-    print("受信:", body)  # Renderのログに表示される（デバッグ用）
+    print("受信:", body)  # ログに表示（デバッグ用）
 
     # ③ 署名を検証して、メッセージを処理する
     try:
         handler.handle(body, signature)
+    except InvalidSignatureError:
+        print("署名エラー: 不正なリクエスト")
+        abort(400)
     except Exception as e:
-        print("エラー:", e)  # エラーが起きたらログに表示
-        abort(400)  # 400エラー（不正なリクエスト）を返す
+        print("その他エラー:", e)
+        abort(500)
 
     return "OK"
 
+
 # ============================================
-# メッセージ受信時の処理
+# メッセージ受信時の処理（ここでAI分類）
 # ============================================
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event):
     """
     テキストメッセージを受信したときに実行される関数
-    - event: LINEから届いたイベント情報が入っている
-    - event.message.text: 送られてきたメッセージの内容
-    - event.source.user_id: 送ってきたユーザーのID
     """
-    # 受信したメッセージとユーザーIDを取り出す
     user_message = event.message.text
     user_id = event.source.user_id
     print(f"ユーザー {user_id} から: {user_message}")  # ログに記録
 
-    # --- オウム返しで返信する（テスト用） ---
-    # 後でここをAI分類やデータベース保存に置き換える
+    # いまはDB未接続なので既存カテゴリは空でOK
+    existing_categories: list[str] = []
+
+    # --- AIでタイトル & カテゴリを推定 ---
+    result = classify_text(user_message, existing_categories)
+    title = result["title"]
+    category = result["category"]
+
+    reply_text = f"📌 分類結果\nタイトル: {title}\nカテゴリ: {category}"
+
+    # LINEに返信
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
             ReplyMessageRequest(
-                reply_token=event.reply_token,  # 返信に必要なトークン
-                messages=[TextMessage(text=f"受信しました: {user_message}")]
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=reply_text)],
             )
         )
+
 
 # ============================================
 # サーバー起動（ローカル実行用）
 # ============================================
 if __name__ == "__main__":
     # ローカルで python app.py を実行したときだけ動く
-    # Renderでは gunicorn が起動するのでここは通らない
     app.run(debug=True)
