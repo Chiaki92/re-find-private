@@ -8,9 +8,9 @@ import os  # 環境変数を読み込むためのライブラリ
 from dotenv import load_dotenv  # .env を読むため
 from flask import Flask, request, abort  # Webサーバーの基本機能
 
-from datetime import datetime, timedelta, timezone  # ★ 追加：日時用
+from datetime import datetime, timedelta, timezone  # 日時用
 
-from supabase import create_client  # ★ 追加：Supabase接続
+from supabase import create_client  # Supabase接続
 
 # --- LINE Bot SDK の必要なパーツを読み込む ---
 from linebot.v3 import WebhookHandler  # LINEからの通知を処理する
@@ -27,7 +27,7 @@ from linebot.v3.webhooks import (
 )
 from linebot.v3.exceptions import InvalidSignatureError  # 署名エラー用
 
-from ai_classifier import classify_text  # ← さっき作った共通関数
+from ai_classifier import classify_text  # AI分類の共通関数
 
 # ============================================
 # .env 読み込み（ローカル開発用）
@@ -49,8 +49,8 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
     raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が設定されていません")
 
-# 型ヒント付きでクライアントを作成
 supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
 # ============================================
 # LINE Bot の設定
 # ============================================
@@ -76,6 +76,7 @@ def index():
     """
     return "Re:find is running."
 
+
 @app.route("/callback", methods=["POST"])
 def callback():
     """
@@ -87,15 +88,16 @@ def callback():
     # ② リクエストの本文（メッセージデータ）を取得
     body = request.get_data(as_text=True)
     print("受信:", body)  # ログに表示（デバッグ用）
+    app.logger.info(f"[callback] body: {body}")
 
     # ③ 署名を検証して、メッセージを処理する
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
-        print("署名エラー: 不正なリクエスト")
+        app.logger.error("署名エラー: 不正なリクエスト")
         abort(400)
     except Exception as e:
-        print("その他エラー:", e)
+        app.logger.error(f"その他エラー: {e}")
         abort(500)
 
     return "OK"
@@ -109,60 +111,92 @@ def callback():
 def handle_text_message(event):
     user_id = event.source.user_id
     text = event.message.text
-    print(f"[テキスト受信] user={user_id}, text={text}")
+    app.logger.info(f"[テキスト受信] user={user_id}, text={text}")
 
-    # ① ユーザーの既存カテゴリ一覧を取得
-    cats = supabase_admin.table("categories") \
-        .select("*") \
-        .eq("line_user_id", user_id) \
-        .execute()
+    # デフォルトの返信（どこかで失敗しても、最低これだけは返す）
+    reply_text = f"メッセージを受信しました：{text}"
 
-    existing = {c["name"]: c["id"] for c in cats.data}
-    category_names = list(existing.keys())
-
-    # ② AI分類
-    result = classify_text(text, category_names)
-    title = result["title"]
-    category_name = result["category"]
-
-    print(f"[AI分類結果] title={title}, category={category_name}")
-
-    # ③ カテゴリなければ作成
-    if category_name in existing:
-        category_id = existing[category_name]
-    else:
-        new_cat = supabase_admin.table("categories") \
-            .insert({"line_user_id": user_id, "name": category_name}) \
+    # --- AI & DB 部分 ---
+    try:
+        # ① ユーザーの既存カテゴリ一覧を取得
+        cats = supabase_admin.table("categories") \
+            .select("*") \
+            .eq("line_user_id", user_id) \
             .execute()
-        category_id = new_cat.data[0]["id"]
-        print(f"[カテゴリ作成] {category_name} (id={category_id})")
 
-    # ④ items に保存（明日21時に通知）
-    tomorrow_9pm = (datetime.now(JST) + timedelta(days=1)).replace(
-        hour=21, minute=0, second=0, microsecond=0
-    )
+        if getattr(cats, "error", None):
+            app.logger.error(f"[supabase] categories error: {cats.error}")
+            existing = {}
+        else:
+            existing = {c["name"]: c["id"] for c in (cats.data or [])}
 
-    supabase_admin.table("items").insert({
-        "line_user_id": user_id,
-        "type": "text",
-        "title": title,
-        "description": text,
-        "category_id": category_id,
-        "status": "pending",
-        "next_notify_at": tomorrow_9pm.isoformat(),
-    }).execute()
+        category_names = list(existing.keys())
 
-    # ⑤ LINE返信
-    reply_text = f"📝 「{category_name}」に保存しました！\nタイトル: {title}"
+        # ② AI分類
+        result = classify_text(text, category_names)
+        title = result.get("title", text[:30])
+        category_name = result.get("category", "未分類")
 
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)],
-            )
+        app.logger.info(f"[AI分類結果] title={title}, category={category_name}")
+
+        # ③ カテゴリなければ作成
+        if category_name in existing:
+            category_id = existing[category_name]
+        else:
+            new_cat = supabase_admin.table("categories") \
+                .insert({"line_user_id": user_id, "name": category_name}) \
+                .execute()
+
+            if getattr(new_cat, "error", None):
+                app.logger.error(f"[supabase] insert category error: {new_cat.error}")
+                category_id = None
+            else:
+                category_id = new_cat.data[0]["id"]
+                app.logger.info(f"[カテゴリ作成] {category_name} (id={category_id})")
+
+        # ④ items に保存（明日21時に通知）
+        tomorrow_9pm = (datetime.now(JST) + timedelta(days=1)).replace(
+            hour=21, minute=0, second=0, microsecond=0
         )
+
+        item_data = {
+            "line_user_id": user_id,
+            "type": "text",
+            "title": title,
+            "description": text,
+            "status": "pending",
+            "next_notify_at": tomorrow_9pm.isoformat(),
+        }
+        if category_id:
+            item_data["category_id"] = category_id
+
+        insert_res = supabase_admin.table("items").insert(item_data).execute()
+        if getattr(insert_res, "error", None):
+            app.logger.error(f"[supabase] insert item error: {insert_res.error}")
+
+        # ここまで全部成功したときだけ、AI結果ベースの返信文に上書き
+        reply_text = f"📝 「{category_name}」に保存しました！\nタイトル: {title}"
+
+    except Exception as e:
+        # AI or Supabase で失敗したとき
+        app.logger.error(f"[handler] unexpected error (AI/DB): {e}")
+        # reply_text はデフォルトのまま（「メッセージ受信しました」）
+
+    # --- LINEへの返信 ---
+    try:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text)],
+                )
+            )
+
+        app.logger.info("[handler] reply_message sent")
+
+    except Exception as e:
+        app.logger.error(f"[handler] unexpected error (reply): {e}")
 
 
 # ============================================
