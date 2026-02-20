@@ -35,6 +35,17 @@ load_dotenv()
 # ============================================
 app = Flask(__name__)
 
+# ============================
+# Supabase接続の設定
+# ============================
+from supabase import create_client
+
+# 管理者用のSupabaseクライアント（service_role keyを使用）
+supabase_admin = create_client(
+    os.environ.get("SUPABASE_URL"),
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+)
+
 # ============================================
 # LINE Bot の設定
 # ============================================
@@ -59,7 +70,6 @@ def index():
     トップページ（動作確認用）
     """
     return "Re:find is running."
-
 
 @app.route("/callback", methods=["POST"])
 def callback():
