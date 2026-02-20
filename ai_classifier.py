@@ -2,6 +2,7 @@
 # Re:find 用の「テキスト分類」共通関数
 
 import os
+import base64
 import json
 import requests
 from dotenv import load_dotenv
@@ -127,3 +128,77 @@ if __name__ == "__main__":
         print("入力:", ex)
         res = classify_text(ex, ["レシピ", "買い物候補"])
         print("結果:", res)
+
+# OpenRouter APIキー
+OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+def classify_image(image_bytes: bytes, existing_categories: list):
+    """
+    画像から
+    ・タイトル
+    ・カテゴリ
+    をAIで生成する関数
+    """
+
+    # ===============================
+    # 画像をBase64に変換（API送信用）
+    # ===============================
+    base64_image = base64.b64encode(image_bytes).decode("utf-8")
+    image_data_url = f"data:image/png;base64,{base64_image}"
+
+    # 既存カテゴリ一覧を文字列に変換
+    categories_str = ", ".join(existing_categories) if existing_categories else "なし"
+
+    # ===============================
+    # AIへの指示文（プロンプト）
+    # ===============================
+    prompt = f"""
+この画像を見て、
+・20文字以内のタイトル
+・8文字以内のカテゴリ
+をJSON形式で出力してください。
+
+既存カテゴリ:
+{categories_str}
+
+必ず以下の形式のみで出力:
+{{"title":"〇〇","category":"〇〇"}}
+"""
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": "qwen/qwen-2.5-vl-72b-instruct:free",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": prompt},
+                    {"type": "input_image", "image_url": image_data_url}
+                ]
+            }
+        ],
+        "response_format": {"type": "json_object"}
+    }
+
+    try:
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
+        result = response.json()
+
+        content = result["choices"][0]["message"]["content"]
+
+        if isinstance(content, str):
+            content = json.loads(content)
+
+        return {
+            "title": content.get("title", "画像メモ"),
+            "category": content.get("category", "未分類")
+        }
+
+    except Exception as e:
+        print("AI解析エラー:", e)
+        return {"title": "画像メモ", "category": "未分類"}

@@ -5,6 +5,7 @@
 # AIで分類した結果を返信するコード
 
 import os  # 環境変数を読み込むためのライブラリ
+import uuid
 from dotenv import load_dotenv  # .env を読むため
 from flask import Flask, request, abort  # Webサーバーの基本機能
 
@@ -205,3 +206,130 @@ def handle_text_message(event):
 if __name__ == "__main__":
     # ローカルで python app.py を実行したときだけ動く
     app.run(debug=True)
+
+from linebot import LineBotApi, WebhookHandler
+from linebot.models import MessageEvent, ImageMessage, TextSendMessage
+from linebot.exceptions import InvalidSignatureError
+
+from storage_handler import upload_image
+from ai_classifier import classify_image
+
+app = Flask(__name__)
+
+# ===============================
+# LINE設定
+# ===============================
+line_bot_api = LineBotApi(os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
+handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
+
+# ===============================
+# Supabase接続
+# ===============================
+supabase = create_client(
+    os.environ["SUPABASE_URL"],
+    os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+)
+
+
+# ===============================
+# LINE Webhook
+# ===============================
+@app.route("/callback", methods=["POST"])
+def callback():
+    signature = request.headers["X-Line-Signature"]
+    body = request.get_data(as_text=True)
+
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+
+    return "OK"
+
+
+# ===============================
+# 画像受信処理
+# ===============================
+@handler.add(MessageEvent, message=ImageMessage)
+def handle_image(event):
+
+    user_id = event.source.user_id
+    message_id = event.message.id
+
+    try:
+        # -------------------------------
+        # ① LINEから画像を取得
+        # -------------------------------
+        message_content = line_bot_api.get_message_content(message_id)
+        image_bytes = b"".join(chunk for chunk in message_content.iter_content())
+
+        # -------------------------------
+        # ② UUID発行（DB用）
+        # -------------------------------
+        item_id = str(uuid.uuid4())
+
+        # -------------------------------
+        # ③ Storageへ保存
+        # -------------------------------
+        image_url = upload_image(user_id, item_id, image_bytes)
+
+        # -------------------------------
+        # ④ 既存カテゴリ取得
+        # -------------------------------
+        res = supabase.table("categories") \
+            .select("id,name") \
+            .eq("user_id", user_id) \
+            .execute()
+
+        category_map = {row["name"]: row["id"] for row in res.data} if res.data else {}
+
+        # -------------------------------
+        # ⑤ AI解析
+        # -------------------------------
+        ai_result = classify_image(image_bytes, list(category_map.keys()))
+        title = ai_result["title"]
+        category_name = ai_result["category"]
+
+        # -------------------------------
+        # ⑥ カテゴリID確定
+        # -------------------------------
+        if category_name in category_map:
+            category_id = category_map[category_name]
+        else:
+            new_cat = supabase.table("categories").insert({
+                "user_id": user_id,
+                "name": category_name
+            }).execute()
+            category_id = new_cat.data[0]["id"]
+
+        # -------------------------------
+        # ⑦ itemsテーブルに保存
+        # -------------------------------
+        supabase.table("items").insert({
+            "id": item_id,
+            "user_id": user_id,
+            "title": title,
+            "category_id": category_id,
+            "type": "image",
+            "image_url": image_url,
+            "status": "pending",
+            "next_notify_at": (
+                datetime.datetime.utcnow()
+                + datetime.timedelta(days=1)
+            ).isoformat()
+        }).execute()
+
+        reply_text = f"📷 {category_name} に保存しました！"
+
+    except Exception as e:
+        print("画像処理エラー:", e)
+        reply_text = "保存に失敗しました。もう一度試してください。"
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=reply_text)
+    )
+
+
+if __name__ == "__main__":
+    app.run()
