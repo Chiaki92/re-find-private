@@ -8,6 +8,10 @@ import os  # 環境変数を読み込むためのライブラリ
 from dotenv import load_dotenv  # .env を読むため
 from flask import Flask, request, abort  # Webサーバーの基本機能
 
+from datetime import datetime, timedelta, timezone  # ★ 追加：日時用
+
+from supabase import create_client  # ★ 追加：Supabase接続
+
 # --- LINE Bot SDK の必要なパーツを読み込む ---
 from linebot.v3 import WebhookHandler  # LINEからの通知を処理する
 from linebot.v3.messaging import (
@@ -28,24 +32,25 @@ from ai_classifier import classify_text  # ← さっき作った共通関数
 # ============================================
 # .env 読み込み（ローカル開発用）
 # ============================================
-load_dotenv()
+load_dotenv()  # これで .env を読み込む（ローカル時のみ）
 
-# ============================================
-# Flaskアプリの初期化
-# ============================================
 app = Flask(__name__)
 
-# ============================
-# Supabase接続の設定
-# ============================
-from supabase import create_client
+# JST
+JST = timezone(timedelta(hours=9))
 
-# 管理者用のSupabaseクライアント（service_role keyを使用）
-supabase_admin = create_client(
-    os.environ.get("SUPABASE_URL"),
-    os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-)
+# ============================================
+# Supabase 管理用クライアント（service_role 用）
+# ============================================
 
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が設定されていません")
+
+# 型ヒント付きでクライアントを作成
+supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # ============================================
 # LINE Bot の設定
 # ============================================
@@ -102,24 +107,54 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event):
-    """
-    テキストメッセージを受信したときに実行される関数
-    """
-    user_message = event.message.text
     user_id = event.source.user_id
-    print(f"ユーザー {user_id} から: {user_message}")  # ログに記録
+    text = event.message.text
+    print(f"[テキスト受信] user={user_id}, text={text}")
 
-    # いまはDB未接続なので既存カテゴリは空でOK
-    existing_categories: list[str] = []
+    # ① ユーザーの既存カテゴリ一覧を取得
+    cats = supabase_admin.table("categories") \
+        .select("*") \
+        .eq("line_user_id", user_id) \
+        .execute()
 
-    # --- AIでタイトル & カテゴリを推定 ---
-    result = classify_text(user_message, existing_categories)
+    existing = {c["name"]: c["id"] for c in cats.data}
+    category_names = list(existing.keys())
+
+    # ② AI分類
+    result = classify_text(text, category_names)
     title = result["title"]
-    category = result["category"]
+    category_name = result["category"]
 
-    reply_text = f"📌 分類結果\nタイトル: {title}\nカテゴリ: {category}"
+    print(f"[AI分類結果] title={title}, category={category_name}")
 
-    # LINEに返信
+    # ③ カテゴリなければ作成
+    if category_name in existing:
+        category_id = existing[category_name]
+    else:
+        new_cat = supabase_admin.table("categories") \
+            .insert({"line_user_id": user_id, "name": category_name}) \
+            .execute()
+        category_id = new_cat.data[0]["id"]
+        print(f"[カテゴリ作成] {category_name} (id={category_id})")
+
+    # ④ items に保存（明日21時に通知）
+    tomorrow_9pm = (datetime.now(JST) + timedelta(days=1)).replace(
+        hour=21, minute=0, second=0, microsecond=0
+    )
+
+    supabase_admin.table("items").insert({
+        "line_user_id": user_id,
+        "type": "text",
+        "title": title,
+        "description": text,
+        "category_id": category_id,
+        "status": "pending",
+        "next_notify_at": tomorrow_9pm.isoformat(),
+    }).execute()
+
+    # ⑤ LINE返信
+    reply_text = f"📝 「{category_name}」に保存しました！\nタイトル: {title}"
+
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
