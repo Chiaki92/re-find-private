@@ -38,8 +38,8 @@ def upload_image(user_id: str, item_id: str, image_bytes: bytes) -> str:
     # Storageへアップロード
     # ===============================
     supabase.storage.from_(BUCKET_NAME).upload(
-        file=file_path,
-        file_content=image_bytes,
+        path=file_path,              # 旧SDK では file= だった
+        file=image_bytes,            # 旧SDK では file_content= だった
         file_options={
             "content-type": "image/png",  # 画像形式
             "upsert": "true"  # 同名なら上書き
