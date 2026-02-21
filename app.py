@@ -143,8 +143,8 @@ def handle_text_message(event):
     text = event.message.text
     app.logger.info(f"[テキスト受信] user={user_id}, text={text}")
 
-    # デフォルトの返信（どこかで失敗しても、最低これだけは返す）
-    reply_text = f"メッセージを受信しました：{text}"
+    # デフォルトの返信（エラー時にユーザーへ返すメッセージ）（B-4-4）
+    reply_text = "⚠️ 保存中にエラーが発生しました。\nもう一度お試しください。"
 
     # --- URL判定（B-4-2）---
     # テキストにURLが含まれていれば URL処理、なければ従来のテキスト処理
@@ -280,15 +280,21 @@ def handle_image_message(event):
     message_id = event.message.id
     app.logger.info(f"[画像受信] user={user_id}, message_id={message_id}")
 
-    # デフォルトの返信（どこかで失敗しても、最低これだけは返す）
-    reply_text = "画像を受信しました。"
+    # デフォルトの返信（エラー時にユーザーへ返すメッセージ）（B-4-4）
+    reply_text = "⚠️ 保存中にエラーが発生しました。\nもう一度お試しください。"
 
     # --- 画像取得 → Storage → AI解析 → DB保存 ---
     try:
         # ① LINEから画像データをダウンロード（v3 SDK の MessagingApiBlob を使用）
-        with ApiClient(configuration) as api_client:
-            blob_api = MessagingApiBlob(api_client)
-            image_bytes = blob_api.get_message_content(message_id)
+        try:
+            with ApiClient(configuration) as api_client:
+                blob_api = MessagingApiBlob(api_client)
+                image_bytes = blob_api.get_message_content(message_id)
+        except Exception as e:
+            # 画像ダウンロード失敗は専用メッセージで返す（B-4-4）
+            app.logger.error(f"[handler] 画像ダウンロード失敗: {e}")
+            reply_text = "⚠️ 画像を取得できませんでした。\nもう一度送信してみてください。"
+            raise  # 外側の except に伝搬して処理を中断する
 
         # ② UUID発行（DB用）
         item_id = str(uuid.uuid4())
@@ -355,9 +361,12 @@ def handle_image_message(event):
         reply_text = f"📷 「{category_name}」に保存しました！\nタイトル: {title}"
 
     except Exception as e:
-        # 画像処理で失敗したとき
+        # 画像処理で失敗したとき（B-4-4）
+        # 画像ダウンロード失敗の場合は既に専用メッセージがセットされているので
+        # それ以外のエラー（Storage・AI・DB等）の場合のみ上書きする
         app.logger.error(f"[handler] unexpected error (画像処理): {e}")
-        reply_text = "保存に失敗しました。もう一度試してください。"
+        if "画像を取得できませんでした" not in reply_text:
+            reply_text = "⚠️ 保存に失敗しました。\nもう一度お試しください。"
 
     # --- LINEへの返信 ---
     try:
