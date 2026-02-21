@@ -159,28 +159,43 @@ def classify_image(image_bytes: bytes, existing_categories: list):
         "Content-Type": "application/json",
     }
 
+    # モデル: google/gemma-3-27b-it:free（無料のマルチモーダルモデル）
+    # メッセージ形式: OpenAI互換の image_url 形式を使用
     payload = {
-        "model": "qwen/qwen-2.5-vl-72b-instruct:free",
+        "model": "google/gemma-3-27b-it:free",
         "messages": [
             {
                 "role": "user",
                 "content": [
-                    {"type": "input_text", "text": prompt},
-                    {"type": "input_image", "image_url": image_data_url}
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_data_url}}
                 ]
             }
         ],
-        "response_format": {"type": "json_object"}
     }
 
     try:
-        response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
         result = response.json()
+
+        # APIエラーチェック
+        if response.status_code != 200:
+            print("画像AI APIエラー:", response.status_code, result)
+            return {"title": "画像メモ", "category": "未分類"}
 
         content = result["choices"][0]["message"]["content"]
 
+        # 文字列の場合はJSONパースを試みる
         if isinstance(content, str):
-            content = json.loads(content)
+            # ```json ... ``` で囲まれている場合に対応
+            if "```" in content:
+                part = content.split("```")
+                content_str = max(part, key=len)
+                if content_str.strip().startswith("json"):
+                    content_str = content_str.strip()[4:]
+                content = json.loads(content_str.strip())
+            else:
+                content = json.loads(content)
 
         return {
             "title": content.get("title", "画像メモ"),

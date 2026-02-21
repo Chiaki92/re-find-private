@@ -5,6 +5,7 @@
 # AIで分類した結果を返信するコード
 
 import os  # 環境変数を読み込むためのライブラリ
+import re  # URL判定の正規表現に使用（B-4-2）
 import uuid
 from dotenv import load_dotenv  # .env を読むため
 from flask import Flask, request, abort  # Webサーバーの基本機能
@@ -27,11 +28,19 @@ from linebot.v3.webhooks import (
     MessageEvent,           # 「メッセージが届いた」というイベント
     TextMessageContent,     # テキストメッセージの中身
     ImageMessageContent,    # 画像メッセージの中身（B-3）
+    # --- 非対応メッセージタイプ（B-4-3）---
+    StickerMessageContent,  # スタンプ
+    VideoMessageContent,    # 動画
+    AudioMessageContent,    # 音声
+    LocationMessageContent, # 位置情報
+    FileMessageContent,     # ファイル
 )
 from linebot.v3.exceptions import InvalidSignatureError  # 署名エラー用
 
 from ai_classifier import classify_text, classify_image  # AI分類の共通関数
 from storage_handler import upload_image  # 画像アップロード（B-3）
+from ogp_fetcher import fetch_ogp  # OGP取得（B-4-2）
+from activity_logger import log_activity  # 行動ログ記録（B-4-5）
 
 # ============================================
 # .env 読み込み（ローカル開発用）
@@ -108,6 +117,24 @@ def callback():
 
 
 # ============================================
+# URL判定ユーティリティ（B-4-2）
+# ============================================
+
+def is_url(text):
+    """
+    テキストにURLが含まれているか判定し、最初のURLを返す。
+    URLが見つからなければ None を返す。
+
+    例:
+        is_url("https://example.com の記事")  → "https://example.com"
+        is_url("今日は天気がいい")              → None
+    """
+    url_pattern = r'https?://[^\s]+'
+    match = re.search(url_pattern, text)
+    return match.group() if match else None
+
+
+# ============================================
 # メッセージ受信時の処理（ここでAI分類）
 # ============================================
 
@@ -117,8 +144,12 @@ def handle_text_message(event):
     text = event.message.text
     app.logger.info(f"[テキスト受信] user={user_id}, text={text}")
 
-    # デフォルトの返信（どこかで失敗しても、最低これだけは返す）
-    reply_text = f"メッセージを受信しました：{text}"
+    # デフォルトの返信（エラー時にユーザーへ返すメッセージ）（B-4-4）
+    reply_text = "⚠️ 保存中にエラーが発生しました。\nもう一度お試しください。"
+
+    # --- URL判定（B-4-2）---
+    # テキストにURLが含まれていれば URL処理、なければ従来のテキスト処理
+    url = is_url(text)
 
     # --- AI & DB 部分 ---
     try:
@@ -136,14 +167,32 @@ def handle_text_message(event):
 
         category_names = list(existing.keys())
 
-        # ② AI分類
-        result = classify_text(text, category_names)
-        title = result.get("title", text[:30])
-        category_name = result.get("category", "未分類")
+        # ===== URL処理（B-4-2）=====
+        if url:
+            app.logger.info(f"[URL検出] url={url}")
 
-        app.logger.info(f"[AI分類結果] title={title}, category={category_name}")
+            # ② OGP情報を取得（タイトル・説明・サムネイル）
+            ogp = fetch_ogp(url)
+            app.logger.info(f"[OGP取得結果] title={ogp['title']}, image={ogp['image']}")
 
-        # ③ カテゴリなければ作成
+            # ③ OGPのタイトル＋説明文を結合してAI分類に渡す
+            ai_input = f"{ogp['title']}。{ogp['description']}"
+            result = classify_text(ai_input, category_names)
+            title = result.get("title", ogp["title"][:30])
+            category_name = result.get("category", "未分類")
+
+            app.logger.info(f"[AI分類結果(URL)] title={title}, category={category_name}")
+
+        # ===== テキスト処理（従来のロジック）=====
+        else:
+            # ② AI分類（テキストをそのまま渡す）
+            result = classify_text(text, category_names)
+            title = result.get("title", text[:30])
+            category_name = result.get("category", "未分類")
+
+            app.logger.info(f"[AI分類結果] title={title}, category={category_name}")
+
+        # ③ カテゴリなければ作成（URL・テキスト共通）
         if category_name in existing:
             category_id = existing[category_name]
         else:
@@ -163,14 +212,30 @@ def handle_text_message(event):
             hour=21, minute=0, second=0, microsecond=0
         )
 
-        item_data = {
-            "line_user_id": user_id,
-            "type": "text",
-            "title": title,
-            "description": text,
-            "status": "pending",
-            "next_notify_at": tomorrow_9pm.isoformat(),
-        }
+        # URL と テキストで保存するデータを分ける
+        if url:
+            # URL用：original_url, description(OGP説明文), ogp_image を保存
+            item_data = {
+                "line_user_id": user_id,
+                "type": "url",
+                "original_url": url,
+                "title": title,
+                "description": ogp["description"],
+                "ogp_image": ogp["image"],
+                "status": "pending",
+                "next_notify_at": tomorrow_9pm.isoformat(),
+            }
+        else:
+            # テキスト用：従来通り
+            item_data = {
+                "line_user_id": user_id,
+                "type": "text",
+                "title": title,
+                "description": text,
+                "status": "pending",
+                "next_notify_at": tomorrow_9pm.isoformat(),
+            }
+
         if category_id:
             item_data["category_id"] = category_id
 
@@ -179,12 +244,18 @@ def handle_text_message(event):
             app.logger.error(f"[supabase] insert item error: {insert_res.error}")
 
         # ここまで全部成功したときだけ、AI結果ベースの返信文に上書き
-        reply_text = f"📝 「{category_name}」に保存しました！\nタイトル: {title}"
+        if url:
+            reply_text = f"🔗 「{category_name}」に保存しました！\nタイトル: {title}"
+        else:
+            reply_text = f"📝 「{category_name}」に保存しました！\nタイトル: {title}"
+
+        # 行動ログを記録（B-4-5）
+        msg_type = "url" if url else "text"
+        log_activity(user_id, "bot_message", metadata={"message_type": msg_type})
 
     except Exception as e:
         # AI or Supabase で失敗したとき
         app.logger.error(f"[handler] unexpected error (AI/DB): {e}")
-        # reply_text はデフォルトのまま（「メッセージ受信しました」）
 
     # --- LINEへの返信 ---
     try:
@@ -213,15 +284,21 @@ def handle_image_message(event):
     message_id = event.message.id
     app.logger.info(f"[画像受信] user={user_id}, message_id={message_id}")
 
-    # デフォルトの返信（どこかで失敗しても、最低これだけは返す）
-    reply_text = "画像を受信しました。"
+    # デフォルトの返信（エラー時にユーザーへ返すメッセージ）（B-4-4）
+    reply_text = "⚠️ 保存中にエラーが発生しました。\nもう一度お試しください。"
 
     # --- 画像取得 → Storage → AI解析 → DB保存 ---
     try:
         # ① LINEから画像データをダウンロード（v3 SDK の MessagingApiBlob を使用）
-        with ApiClient(configuration) as api_client:
-            blob_api = MessagingApiBlob(api_client)
-            image_bytes = blob_api.get_message_content(message_id)
+        try:
+            with ApiClient(configuration) as api_client:
+                blob_api = MessagingApiBlob(api_client)
+                image_bytes = blob_api.get_message_content(message_id)
+        except Exception as e:
+            # 画像ダウンロード失敗は専用メッセージで返す（B-4-4）
+            app.logger.error(f"[handler] 画像ダウンロード失敗: {e}")
+            reply_text = "⚠️ 画像を取得できませんでした。\nもう一度送信してみてください。"
+            raise  # 外側の except に伝搬して処理を中断する
 
         # ② UUID発行（DB用）
         item_id = str(uuid.uuid4())
@@ -287,10 +364,16 @@ def handle_image_message(event):
         # ここまで全部成功したときだけ、AI結果ベースの返信文に上書き
         reply_text = f"📷 「{category_name}」に保存しました！\nタイトル: {title}"
 
+        # 行動ログを記録（B-4-5）
+        log_activity(user_id, "bot_message", metadata={"message_type": "image"})
+
     except Exception as e:
-        # 画像処理で失敗したとき
+        # 画像処理で失敗したとき（B-4-4）
+        # 画像ダウンロード失敗の場合は既に専用メッセージがセットされているので
+        # それ以外のエラー（Storage・AI・DB等）の場合のみ上書きする
         app.logger.error(f"[handler] unexpected error (画像処理): {e}")
-        reply_text = "保存に失敗しました。もう一度試してください。"
+        if "画像を取得できませんでした" not in reply_text:
+            reply_text = "⚠️ 保存に失敗しました。\nもう一度お試しください。"
 
     # --- LINEへの返信 ---
     try:
@@ -307,6 +390,33 @@ def handle_image_message(event):
 
     except Exception as e:
         app.logger.error(f"[handler] unexpected error (reply): {e}")
+
+
+# ============================================
+# 非対応メッセージの共通ハンドラ（B-4-3）
+# ============================================
+# スタンプ・動画・音声・位置情報・ファイルは現在非対応。
+# 対応していないメッセージが送られたとき、案内メッセージを返す。
+
+for msg_type in [StickerMessageContent, VideoMessageContent,
+                 AudioMessageContent, LocationMessageContent,
+                 FileMessageContent]:
+    @handler.add(MessageEvent, message=msg_type)
+    def handle_unsupported(event):
+        """非対応メッセージを受信したときの共通ハンドラ"""
+        try:
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(
+                            text="📌 現在は画像・URL・テキストに対応しています。\nスクショやURLを送ってみてください！"
+                        )]
+                    )
+                )
+        except Exception as e:
+            app.logger.error(f"[handler] 非対応メッセージ返信エラー: {e}")
 
 
 # ============================================
