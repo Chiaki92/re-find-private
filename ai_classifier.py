@@ -1,5 +1,5 @@
 # ai_classifier.py
-# Re:find 用の「テキスト分類」共通関数
+# Re:find 用の「テキスト・画像分類」共通関数
 
 import os
 import base64
@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # === 分類用プロンプト（B-2-2で決めたやつ） ===
 BASE_PROMPT = """あなたは「Re:find」という、後で見返したい情報を整理するサービスの分類アシスタントです。
@@ -116,22 +117,9 @@ def classify_text(text: str, existing_categories: list[str] | None = None) -> di
         }
 
 
-# 単体テスト用
-if __name__ == "__main__":
-    examples = [
-        "駅前のピアノ教室。月曜16時に体験レッスンあり、小学生向け。",
-        "楽天スーパーセールでスニーカー半額。23日まで。",
-        "鶏むね肉と醤油・みりんで作る簡単照り焼きレシピ。",
-    ]
-    for ex in examples:
-        print("====")
-        print("入力:", ex)
-        res = classify_text(ex, ["レシピ", "買い物候補"])
-        print("結果:", res)
-
-# OpenRouter APIキー
-OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# ============================================
+# 画像分類関数（B-3 で追加）
+# ============================================
 
 def classify_image(image_bytes: bytes, existing_categories: list):
     """
@@ -202,3 +190,17 @@ def classify_image(image_bytes: bytes, existing_categories: list):
     except Exception as e:
         print("AI解析エラー:", e)
         return {"title": "画像メモ", "category": "未分類"}
+
+
+# 単体テスト用
+if __name__ == "__main__":
+    examples = [
+        "駅前のピアノ教室。月曜16時に体験レッスンあり、小学生向け。",
+        "楽天スーパーセールでスニーカー半額。23日まで。",
+        "鶏むね肉と醤油・みりんで作る簡単照り焼きレシピ。",
+    ]
+    for ex in examples:
+        print("====")
+        print("入力:", ex)
+        res = classify_text(ex, ["レシピ", "買い物候補"])
+        print("結果:", res)

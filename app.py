@@ -19,16 +19,19 @@ from linebot.v3.messaging import (
     Configuration,          # LINE APIの設定情報を管理
     ApiClient,              # LINE APIと通信するためのクライアント
     MessagingApi,           # メッセージ送受信の機能
+    MessagingApiBlob,       # 画像などのバイナリ取得用（B-3）
     ReplyMessageRequest,    # 返信メッセージのリクエスト
     TextMessage,            # テキストメッセージ
 )
 from linebot.v3.webhooks import (
     MessageEvent,           # 「メッセージが届いた」というイベント
     TextMessageContent,     # テキストメッセージの中身
+    ImageMessageContent,    # 画像メッセージの中身（B-3）
 )
 from linebot.v3.exceptions import InvalidSignatureError  # 署名エラー用
 
-from ai_classifier import classify_text  # AI分類の共通関数
+from ai_classifier import classify_text, classify_image  # AI分類の共通関数
+from storage_handler import upload_image  # 画像アップロード（B-3）
 
 # ============================================
 # .env 読み込み（ローカル開発用）
@@ -201,135 +204,114 @@ def handle_text_message(event):
 
 
 # ============================================
+# 画像受信時の処理（B-3 で追加）
+# ============================================
+
+@handler.add(MessageEvent, message=ImageMessageContent)
+def handle_image_message(event):
+    user_id = event.source.user_id
+    message_id = event.message.id
+    app.logger.info(f"[画像受信] user={user_id}, message_id={message_id}")
+
+    # デフォルトの返信（どこかで失敗しても、最低これだけは返す）
+    reply_text = "画像を受信しました。"
+
+    # --- 画像取得 → Storage → AI解析 → DB保存 ---
+    try:
+        # ① LINEから画像データをダウンロード（v3 SDK の MessagingApiBlob を使用）
+        with ApiClient(configuration) as api_client:
+            blob_api = MessagingApiBlob(api_client)
+            image_bytes = blob_api.get_message_content(message_id)
+
+        # ② UUID発行（DB用）
+        item_id = str(uuid.uuid4())
+
+        # ③ Supabase Storageへ保存
+        image_url = upload_image(user_id, item_id, image_bytes)
+
+        # ④ 既存カテゴリ取得
+        cats = supabase_admin.table("categories") \
+            .select("*") \
+            .eq("line_user_id", user_id) \
+            .execute()
+
+        if getattr(cats, "error", None):
+            app.logger.error(f"[supabase] categories error: {cats.error}")
+            existing = {}
+        else:
+            existing = {c["name"]: c["id"] for c in (cats.data or [])}
+
+        # ⑤ AI解析（画像からタイトル・カテゴリを生成）
+        ai_result = classify_image(image_bytes, list(existing.keys()))
+        title = ai_result.get("title", "画像メモ")
+        category_name = ai_result.get("category", "未分類")
+
+        app.logger.info(f"[AI画像分類結果] title={title}, category={category_name}")
+
+        # ⑥ カテゴリなければ作成
+        if category_name in existing:
+            category_id = existing[category_name]
+        else:
+            new_cat = supabase_admin.table("categories") \
+                .insert({"line_user_id": user_id, "name": category_name}) \
+                .execute()
+
+            if getattr(new_cat, "error", None):
+                app.logger.error(f"[supabase] insert category error: {new_cat.error}")
+                category_id = None
+            else:
+                category_id = new_cat.data[0]["id"]
+                app.logger.info(f"[カテゴリ作成] {category_name} (id={category_id})")
+
+        # ⑦ items に保存（明日21時に通知）
+        tomorrow_9pm = (datetime.now(JST) + timedelta(days=1)).replace(
+            hour=21, minute=0, second=0, microsecond=0
+        )
+
+        item_data = {
+            "id": item_id,
+            "line_user_id": user_id,
+            "type": "image",
+            "title": title,
+            "image_url": image_url,
+            "status": "pending",
+            "next_notify_at": tomorrow_9pm.isoformat(),
+        }
+        if category_id:
+            item_data["category_id"] = category_id
+
+        insert_res = supabase_admin.table("items").insert(item_data).execute()
+        if getattr(insert_res, "error", None):
+            app.logger.error(f"[supabase] insert item error: {insert_res.error}")
+
+        # ここまで全部成功したときだけ、AI結果ベースの返信文に上書き
+        reply_text = f"📷 「{category_name}」に保存しました！\nタイトル: {title}"
+
+    except Exception as e:
+        # 画像処理で失敗したとき
+        app.logger.error(f"[handler] unexpected error (画像処理): {e}")
+        reply_text = "保存に失敗しました。もう一度試してください。"
+
+    # --- LINEへの返信 ---
+    try:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text)],
+                )
+            )
+
+        app.logger.info("[handler] reply_message sent (画像)")
+
+    except Exception as e:
+        app.logger.error(f"[handler] unexpected error (reply): {e}")
+
+
+# ============================================
 # サーバー起動（ローカル実行用）
 # ============================================
 if __name__ == "__main__":
     # ローカルで python app.py を実行したときだけ動く
     app.run(debug=True)
-
-from linebot import LineBotApi, WebhookHandler
-from linebot.models import MessageEvent, ImageMessage, TextSendMessage
-from linebot.exceptions import InvalidSignatureError
-
-from storage_handler import upload_image
-from ai_classifier import classify_image
-
-app = Flask(__name__)
-
-# ===============================
-# LINE設定
-# ===============================
-line_bot_api = LineBotApi(os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
-handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
-
-# ===============================
-# Supabase接続
-# ===============================
-supabase = create_client(
-    os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-)
-
-
-# ===============================
-# LINE Webhook
-# ===============================
-@app.route("/callback", methods=["POST"])
-def callback():
-    signature = request.headers["X-Line-Signature"]
-    body = request.get_data(as_text=True)
-
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
-
-    return "OK"
-
-
-# ===============================
-# 画像受信処理
-# ===============================
-@handler.add(MessageEvent, message=ImageMessage)
-def handle_image(event):
-
-    user_id = event.source.user_id
-    message_id = event.message.id
-
-    try:
-        # -------------------------------
-        # ① LINEから画像を取得
-        # -------------------------------
-        message_content = line_bot_api.get_message_content(message_id)
-        image_bytes = b"".join(chunk for chunk in message_content.iter_content())
-
-        # -------------------------------
-        # ② UUID発行（DB用）
-        # -------------------------------
-        item_id = str(uuid.uuid4())
-
-        # -------------------------------
-        # ③ Storageへ保存
-        # -------------------------------
-        image_url = upload_image(user_id, item_id, image_bytes)
-
-        # -------------------------------
-        # ④ 既存カテゴリ取得
-        # -------------------------------
-        res = supabase.table("categories") \
-            .select("id,name") \
-            .eq("user_id", user_id) \
-            .execute()
-
-        category_map = {row["name"]: row["id"] for row in res.data} if res.data else {}
-
-        # -------------------------------
-        # ⑤ AI解析
-        # -------------------------------
-        ai_result = classify_image(image_bytes, list(category_map.keys()))
-        title = ai_result["title"]
-        category_name = ai_result["category"]
-
-        # -------------------------------
-        # ⑥ カテゴリID確定
-        # -------------------------------
-        if category_name in category_map:
-            category_id = category_map[category_name]
-        else:
-            new_cat = supabase.table("categories").insert({
-                "user_id": user_id,
-                "name": category_name
-            }).execute()
-            category_id = new_cat.data[0]["id"]
-
-        # -------------------------------
-        # ⑦ itemsテーブルに保存
-        # -------------------------------
-        supabase.table("items").insert({
-            "id": item_id,
-            "user_id": user_id,
-            "title": title,
-            "category_id": category_id,
-            "type": "image",
-            "image_url": image_url,
-            "status": "pending",
-            "next_notify_at": (
-                datetime.datetime.utcnow()
-                + datetime.timedelta(days=1)
-            ).isoformat()
-        }).execute()
-
-        reply_text = f"📷 {category_name} に保存しました！"
-
-    except Exception as e:
-        print("画像処理エラー:", e)
-        reply_text = "保存に失敗しました。もう一度試してください。"
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_text)
-    )
-
-
-if __name__ == "__main__":
-    app.run()
