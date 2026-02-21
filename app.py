@@ -87,6 +87,8 @@ supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 #   → LINE Developers で「LINE Login」タイプのチャネルを新規作成して取得する
 LINE_LOGIN_CHANNEL_ID = os.environ.get("LINE_LOGIN_CHANNEL_ID")        # LINE Login の Channel ID
 LINE_LOGIN_CHANNEL_SECRET = os.environ.get("LINE_LOGIN_CHANNEL_SECRET")  # LINE Login の Channel Secret
+# LIFF ID: LINE DevelopersのLIFFタブで作成したアプリのID
+LIFF_ID = os.environ.get("LIFF_ID")
 # コールバックURL: LINEで認証した後、ユーザーが戻ってくる先
 #   → LINE Developers の「コールバックURL」にも同じURLを設定する必要がある
 LINE_LOGIN_REDIRECT_URI = os.environ.get(
@@ -289,6 +291,53 @@ def logout():
     """セッションを全てクリアしてログイン画面に戻す"""
     session.clear()  # line_user_id, display_name, oauth_state などを全削除
     return redirect("/login")
+
+
+# ============================================
+# LIFF（LINEアプリ内シームレスログイン）
+# ============================================
+
+@app.route("/liff")
+def liff_entry():
+    """
+    LINEアプリ内から開いた場合のエントリポイント。
+    LIFF SDKを使ってLINEのプロフィール情報を自動取得し、
+    セッションを発行してから一覧画面へリダイレクトする。
+    外部ブラウザからアクセスした場合は通常のログインフローにフォールバック。
+    """
+    if not LIFF_ID:
+        app.logger.error("LIFF_ID が設定されていません")
+        return redirect("/login")
+    return render_template("liff.html", liff_id=LIFF_ID)
+
+
+@app.route("/api/liff-login", methods=["POST"])
+def liff_login():
+    """LIFFから受け取ったユーザー情報でセッションを発行"""
+    data = request.json
+    line_user_id = data.get("userId")
+    display_name = data.get("displayName")
+
+    if not line_user_id:
+        return {"error": "userId is required"}, 400
+
+    # DB保存（通常ログインと同じ処理）
+    try:
+        supabase_admin.table("users").upsert({
+            "line_user_id": line_user_id,
+            "display_name": display_name,
+        }, on_conflict="line_user_id").execute()
+
+        _create_default_data_if_needed(line_user_id)
+    except Exception as e:
+        app.logger.error(f"LIFF DB保存エラー: {e}")
+
+    # セッション発行（通常のログインと同じ状態にする）
+    session.permanent = True
+    session["line_user_id"] = line_user_id
+    session["display_name"] = display_name
+
+    return {"ok": True}
 
 
 def _create_default_data_if_needed(line_user_id):
