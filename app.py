@@ -40,6 +40,7 @@ from linebot.v3.exceptions import InvalidSignatureError  # 署名エラー用
 from ai_classifier import classify_text, classify_image  # AI分類の共通関数
 from storage_handler import upload_image  # 画像アップロード（B-3）
 from ogp_fetcher import fetch_ogp  # OGP取得（B-4-2）
+from activity_logger import log_activity  # 行動ログ記録（B-4-5）
 
 # ============================================
 # .env 読み込み（ローカル開発用）
@@ -248,10 +249,13 @@ def handle_text_message(event):
         else:
             reply_text = f"📝 「{category_name}」に保存しました！\nタイトル: {title}"
 
+        # 行動ログを記録（B-4-5）
+        msg_type = "url" if url else "text"
+        log_activity(user_id, "bot_message", metadata={"message_type": msg_type})
+
     except Exception as e:
         # AI or Supabase で失敗したとき
         app.logger.error(f"[handler] unexpected error (AI/DB): {e}")
-        # reply_text はデフォルトのまま（「メッセージ受信しました」）
 
     # --- LINEへの返信 ---
     try:
@@ -359,6 +363,9 @@ def handle_image_message(event):
 
         # ここまで全部成功したときだけ、AI結果ベースの返信文に上書き
         reply_text = f"📷 「{category_name}」に保存しました！\nタイトル: {title}"
+
+        # 行動ログを記録（B-4-5）
+        log_activity(user_id, "bot_message", metadata={"message_type": "image"})
 
     except Exception as e:
         # 画像処理で失敗したとき（B-4-4）
