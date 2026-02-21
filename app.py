@@ -28,6 +28,12 @@ from linebot.v3.webhooks import (
     MessageEvent,           # 「メッセージが届いた」というイベント
     TextMessageContent,     # テキストメッセージの中身
     ImageMessageContent,    # 画像メッセージの中身（B-3）
+    # --- 非対応メッセージタイプ（B-4-3）---
+    StickerMessageContent,  # スタンプ
+    VideoMessageContent,    # 動画
+    AudioMessageContent,    # 音声
+    LocationMessageContent, # 位置情報
+    FileMessageContent,     # ファイル
 )
 from linebot.v3.exceptions import InvalidSignatureError  # 署名エラー用
 
@@ -368,6 +374,33 @@ def handle_image_message(event):
 
     except Exception as e:
         app.logger.error(f"[handler] unexpected error (reply): {e}")
+
+
+# ============================================
+# 非対応メッセージの共通ハンドラ（B-4-3）
+# ============================================
+# スタンプ・動画・音声・位置情報・ファイルは現在非対応。
+# 対応していないメッセージが送られたとき、案内メッセージを返す。
+
+for msg_type in [StickerMessageContent, VideoMessageContent,
+                 AudioMessageContent, LocationMessageContent,
+                 FileMessageContent]:
+    @handler.add(MessageEvent, message=msg_type)
+    def handle_unsupported(event):
+        """非対応メッセージを受信したときの共通ハンドラ"""
+        try:
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(
+                            text="📌 現在は画像・URL・テキストに対応しています。\nスクショやURLを送ってみてください！"
+                        )]
+                    )
+                )
+        except Exception as e:
+            app.logger.error(f"[handler] 非対応メッセージ返信エラー: {e}")
 
 
 # ============================================
