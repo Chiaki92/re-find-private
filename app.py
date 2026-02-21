@@ -7,8 +7,11 @@
 import os  # 環境変数を読み込むためのライブラリ
 import re  # URL判定の正規表現に使用（B-4-2）
 import uuid
+import secrets  # CSRF対策用（B-5）
+from functools import wraps  # login_required デコレータ用（B-5）
+import requests as http_requests  # LINE Login API用（Flask の request と名前が被るので別名）
 from dotenv import load_dotenv  # .env を読むため
-from flask import Flask, request, abort  # Webサーバーの基本機能
+from flask import Flask, request, abort, session, redirect, render_template  # Webサーバーの基本機能
 
 from datetime import datetime, timedelta, timezone  # 日時用
 
@@ -49,6 +52,19 @@ load_dotenv()  # これで .env を読み込む（ローカル時のみ）
 
 app = Flask(__name__)
 
+# ============================================
+# セッション設定（B-5：ログイン状態をブラウザに覚えさせる）
+# ============================================
+# secret_key: セッションデータを暗号化するための秘密鍵
+#   → 本番では FLASK_SECRET_KEY 環境変数に secrets.token_hex(32) で生成した値を設定する
+#   → "dev-secret-key" はローカル開発用のフォールバック
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
+# SameSite=Lax: 外部サイトからのリンク遷移時にCookieを送る（LINE認証コールバックで必要）
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# セッションの有効期限: 30日間（秒単位で指定）
+# → この設定がないとブラウザを閉じるたびにログアウトされてしまう
+app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 30  # 30日間
+
 # JST
 JST = timezone(timedelta(hours=9))
 
@@ -65,6 +81,20 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 # ============================================
+# LINE Login の設定（B-5：Messaging API とは別のチャネル）
+# ============================================
+# ⚠️ LINE Login チャネルは Messaging API チャネルとは別物
+#   → LINE Developers で「LINE Login」タイプのチャネルを新規作成して取得する
+LINE_LOGIN_CHANNEL_ID = os.environ.get("LINE_LOGIN_CHANNEL_ID")        # LINE Login の Channel ID
+LINE_LOGIN_CHANNEL_SECRET = os.environ.get("LINE_LOGIN_CHANNEL_SECRET")  # LINE Login の Channel Secret
+# コールバックURL: LINEで認証した後、ユーザーが戻ってくる先
+#   → LINE Developers の「コールバックURL」にも同じURLを設定する必要がある
+LINE_LOGIN_REDIRECT_URI = os.environ.get(
+    "LINE_LOGIN_REDIRECT_URI",
+    "https://re-find.onrender.com/login/callback"  # デフォルト値（Render のURL）
+)
+
+# ============================================
 # LINE Bot の設定
 # ============================================
 channel_access_token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
@@ -79,16 +109,244 @@ configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
 
 # ============================================
+# ヘルパー関数（B-5：認証まわり）
+# ============================================
+
+def get_current_user_line_id():
+    """
+    現在ログイン中のユーザーの line_user_id を返す。未ログインなら None。
+    使い方: line_user_id = get_current_user_line_id()
+    """
+    return session.get("line_user_id")
+
+
+def login_required(f):
+    """
+    ログインしていないユーザーをログイン画面にリダイレクトするデコレータ。
+    使い方:
+        @app.route("/protected")
+        @login_required
+        def protected_page():
+            ...
+    """
+    @wraps(f)  # 元の関数名やdocstringを保持する
+    def decorated_function(*args, **kwargs):
+        if not session.get("line_user_id"):
+            return redirect("/login")  # 未ログイン → ログイン画面へ
+        return f(*args, **kwargs)  # ログイン済み → 元の関数を実行
+    return decorated_function
+
+
+# ============================================
 # ルート（URL）の設定
 # ============================================
 
 @app.route("/")
+@login_required
 def index():
-    """
-    トップページ（動作確認用）
-    """
+    """トップページ（ログイン必須）"""
     return "Re:find is running."
 
+
+# ============================================
+# ログイン・ログアウト（B-5）
+# ============================================
+
+@app.route("/login")
+def login_page():
+    """ログイン画面を表示する"""
+    # すでにログイン済みならトップページへ飛ばす（二重ログイン防止）
+    if session.get("line_user_id"):
+        return redirect("/")
+    return render_template("login.html")
+
+
+@app.route("/login/line")
+def login_line():
+    """
+    「LINEでログイン」ボタンを押したときの処理。
+    LINEの認証ページ（authorize URL）にリダイレクトする。
+    """
+    # CSRF対策: ランダムな文字列を生成してセッションに保存
+    # → コールバック時に同じ値が返ってくるか検証する（なりすまし防止）
+    state = secrets.token_urlsafe(32)
+    session["oauth_state"] = state
+
+    # LINE の認証ページURL を組み立てる
+    # response_type=code → 認証コードフローを使用
+    # scope=profile openid → プロフィール情報とIDを要求
+    auth_url = (
+        "https://access.line.me/oauth2/v2.1/authorize"
+        f"?response_type=code"
+        f"&client_id={LINE_LOGIN_CHANNEL_ID}"
+        f"&redirect_uri={LINE_LOGIN_REDIRECT_URI}"
+        f"&state={state}"
+        f"&scope=profile%20openid"
+    )
+    # LINEの認証ページへ飛ばす
+    return redirect(auth_url)
+
+
+@app.route("/login/callback")
+def login_callback():
+    """
+    LINEで認証した後、戻ってくる先（コールバック）。
+    ⚠️ /callback（LINE Bot Webhook）とは別のルート。衝突しない。
+
+    処理の流れ:
+      ④ LINEからcodeを受け取る
+      ⑤ codeをアクセストークンに交換する
+      ⑥ アクセストークンでプロフィールを取得する
+      ⑦ DBに保存（UPSERT） + デフォルトデータ作成
+      ⑧ セッションに保存してトップページへリダイレクト
+    """
+
+    # --- エラーチェック ---
+
+    # LINE側でエラーが発生した場合（ユーザーがキャンセルした等）
+    error = request.args.get("error")
+    if error:
+        app.logger.error(f"LINE認証エラー: {error}")
+        return redirect("/login")
+
+    # CSRF対策チェック（送ったstateと返ってきたstateが一致するか）
+    state = request.args.get("state")
+    if state != session.get("oauth_state"):
+        app.logger.error("stateが一致しません（CSRF攻撃の可能性）")
+        return redirect("/login")
+
+    # ④ LINEから認証コードを取得
+    code = request.args.get("code")
+    if not code:
+        app.logger.error("認証コードがありません")
+        return redirect("/login")
+
+    # --- ⑤ 認証コードをアクセストークンに交換する ---
+    # LINE の token API に POST リクエストを送る
+    token_response = http_requests.post(
+        "https://api.line.me/oauth2/v2.1/token",
+        data={
+            "grant_type": "authorization_code",  # 認証コードフロー
+            "code": code,                          # LINEからもらった認証コード
+            "redirect_uri": LINE_LOGIN_REDIRECT_URI,  # コールバックURL（一致必須）
+            "client_id": LINE_LOGIN_CHANNEL_ID,        # LINE Login の Channel ID
+            "client_secret": LINE_LOGIN_CHANNEL_SECRET,  # LINE Login の Channel Secret
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    if token_response.status_code != 200:
+        app.logger.error(f"トークン取得失敗: {token_response.text}")
+        return redirect("/login")
+
+    # レスポンスからアクセストークンを取り出す
+    access_token = token_response.json().get("access_token")
+
+    # --- ⑥ アクセストークンでユーザーのプロフィールを取得する ---
+    # LINE の profile API に GET リクエストを送る
+    profile_response = http_requests.get(
+        "https://api.line.me/v2/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    if profile_response.status_code != 200:
+        app.logger.error(f"プロフィール取得失敗: {profile_response.text}")
+        return redirect("/login")
+
+    profile = profile_response.json()
+    line_user_id = profile.get("userId")       # 例："U1234abcdef..."
+    display_name = profile.get("displayName")  # 例："ちあき"
+
+    app.logger.info(f"ログイン成功: {display_name} ({line_user_id})")
+
+    # --- ⑦ DBに保存（UPSERT：あれば更新、なければ作成） ---
+    try:
+        # users テーブルに line_user_id と display_name を保存
+        # on_conflict="line_user_id" → 同じユーザーが再ログインしたら display_name を更新
+        supabase_admin.table("users").upsert({
+            "line_user_id": line_user_id,
+            "display_name": display_name,
+        }, on_conflict="line_user_id").execute()
+
+        # 初回ログイン時のみ: デフォルトのカテゴリ・設定・通知ルールを作成
+        _create_default_data_if_needed(line_user_id)
+
+    except Exception as e:
+        app.logger.error(f"DB保存エラー: {e}")
+        # DB保存に失敗してもログインは続行する（ユーザー体験を優先）
+
+    # --- ⑧ セッションにログイン情報を保存 ---
+    session.permanent = True  # 30日間有効にする（PERMANENT_SESSION_LIFETIME で設定した期間）
+    session["line_user_id"] = line_user_id    # 他のルートでユーザー判別に使う
+    session["display_name"] = display_name    # 画面表示用
+
+    # トップページへリダイレクト
+    return redirect("/")
+
+
+@app.route("/logout")
+def logout():
+    """セッションを全てクリアしてログイン画面に戻す"""
+    session.clear()  # line_user_id, display_name, oauth_state などを全削除
+    return redirect("/login")
+
+
+def _create_default_data_if_needed(line_user_id):
+    """
+    初回ログイン時にデフォルトのカテゴリ・設定・通知ルールを作成する。
+    すでにデータがある場合（2回目以降のログイン）は何もしない。
+    """
+
+    # --- 「未分類」カテゴリがなければ作成 ---
+    # LINE Bot でメッセージを送ったとき、カテゴリが判定できなかった場合に使われる
+    existing = supabase_admin.table("categories") \
+        .select("id") \
+        .eq("line_user_id", line_user_id) \
+        .eq("name", "未分類") \
+        .execute()
+
+    if not existing.data:
+        supabase_admin.table("categories").insert({
+            "line_user_id": line_user_id,
+            "name": "未分類",
+        }).execute()
+
+    # --- user_settings がなければデフォルト作成 ---
+    # 通知時間のデフォルト: 21:00（夜9時）
+    existing_settings = supabase_admin.table("user_settings") \
+        .select("id") \
+        .eq("line_user_id", line_user_id) \
+        .execute()
+
+    if not existing_settings.data:
+        supabase_admin.table("user_settings").insert({
+            "line_user_id": line_user_id,
+            "notify_time": "21:00",      # デフォルトの通知時刻
+            "notify_enabled": True,       # 通知ON
+        }).execute()
+
+    # --- notification_rules がなければデフォルト作成 ---
+    # 忘却曲線ベースの通知間隔: 1日後、3日後、7日後、14日後、30日後、60日後
+    existing_rules = supabase_admin.table("notification_rules") \
+        .select("id") \
+        .eq("line_user_id", line_user_id) \
+        .execute()
+
+    if not existing_rules.data:
+        supabase_admin.table("notification_rules").insert({
+            "line_user_id": line_user_id,
+            "category_id": None,      # 全カテゴリ共通のルール
+            "item_id": None,          # 全アイテム共通のルール
+            "rule_type": "interval",  # 間隔ベースの通知
+            "config": {"days": [1, 3, 7, 14, 30, 60]},  # 忘却曲線に基づく日数
+            "is_active": True,        # ルール有効
+            "priority": 10,           # 優先度（数値が大きいほど優先）
+        }).execute()
+
+
+# ============================================
+# LINE Bot Webhook（Messaging API）
+# ============================================
 
 @app.route("/callback", methods=["POST"])
 def callback():
