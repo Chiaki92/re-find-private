@@ -470,6 +470,80 @@ def _create_default_data_if_needed(line_user_id):
 
 
 # ============================================
+# アイテム API（更新・削除・共有）
+# ============================================
+
+@app.route("/api/items/<item_id>", methods=["PUT"])
+@login_required
+def update_item(item_id):
+    """アイテムを更新する（カテゴリ変更、メモ追加、対応済みなど）"""
+    line_user_id = get_current_user_line_id()
+    data = request.json
+
+    # 更新できるフィールドだけ抽出（不正なフィールドを弾く）
+    allowed_fields = {"title", "category_id", "memo", "status"}
+    update_data = {k: v for k, v in data.items() if k in allowed_fields}
+
+    if not update_data:
+        return {"error": "更新するデータがありません"}, 400
+
+    try:
+        supabase_admin.table("items") \
+            .update(update_data) \
+            .eq("id", item_id) \
+            .eq("line_user_id", line_user_id) \
+            .execute()
+        return {"ok": True}
+    except Exception as e:
+        print(f"アイテム更新エラー: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.route("/api/items/<item_id>", methods=["DELETE"])
+@login_required
+def delete_item(item_id):
+    """アイテムを削除する（ソフトデリート：deleted_at に日時を入れる）"""
+    line_user_id = get_current_user_line_id()
+
+    try:
+        supabase_admin.table("items") \
+            .update({"deleted_at": datetime.now(JST).isoformat()}) \
+            .eq("id", item_id) \
+            .eq("line_user_id", line_user_id) \
+            .execute()
+        return {"ok": True}
+    except Exception as e:
+        print(f"アイテム削除エラー: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.route("/api/items/<item_id>/share", methods=["POST"])
+@login_required
+def create_share_link(item_id):
+    """共有リンクを作成する"""
+    line_user_id = get_current_user_line_id()
+
+    # ランダムなトークンを生成
+    token = str(uuid.uuid4()).replace("-", "")[:16]
+
+    try:
+        supabase_admin.table("shared_links").insert({
+            "line_user_id": line_user_id,
+            "item_id": item_id,
+            "token": token,
+        }).execute()
+
+        # 共有URLを返す
+        base_url = request.host_url.rstrip("/")
+        share_url = f"{base_url}/share/{token}"
+
+        return {"ok": True, "share_url": share_url}
+    except Exception as e:
+        print(f"共有リンク作成エラー: {e}")
+        return {"error": str(e)}, 500
+
+
+# ============================================
 # LINE Bot Webhook（Messaging API）
 # ============================================
 
