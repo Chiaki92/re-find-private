@@ -5,6 +5,7 @@ GitHub Actions で毎日 UTC 12:00（JST 21:00）に実行。
 """
 
 import os
+import sys
 import logging
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
@@ -13,6 +14,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
 from linebot.v3.messaging.models import TextMessage, PushMessageRequest
+from activity_logger import log_activity
 
 load_dotenv()
 
@@ -63,13 +65,20 @@ def fetch_pending_items():
     now = datetime.now(JST).isoformat()
     res = (
         supabase.table("items")
-        .select("id, line_user_id, title, notify_count, category_id")
+        .select("id, line_user_id, title, notify_count, created_at, categories(name)")
         .eq("status", "pending")
         .is_("deleted_at", "null")
         .lte("next_notify_at", now)
         .execute()
     )
-    return res.data
+    items = res.data or []
+
+    # categories(name) の結果を category_name に整形
+    for item in items:
+        cat = item.pop("categories", None)
+        item["category_name"] = cat["name"] if cat else "未分類"
+
+    return items
 
 
 # ── ユーザーごとにグループ化 ───────────────────────
@@ -84,36 +93,71 @@ def group_by_user(items):
     return grouped
 
 
+# ── 経過日数の計算 ──────────────────────────────────
+def calc_days_since(created_at_str):
+    """保存日時から今日までの経過日数を計算する"""
+    try:
+        created_at = datetime.fromisoformat(created_at_str)
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=JST)
+        delta = datetime.now(JST) - created_at
+        return delta.days
+    except Exception:
+        return "?"
+
+
 # ── 通知メッセージの組み立て ───────────────────────
 def build_message(items):
     """
     ユーザーに送信する1通分のメッセージを組み立てる。
-    - 通常通知: タイトルと通知回数を表示
-    - 最終通知（6回目）: 特別な文面でアーカイブされることを案内
+    - 通常通知（1〜5回目）: カテゴリ名と通知回数を表示
+    - 最終通知（6回目）: 経過日数付きの特別な文面
     """
-    lines = ["📬 re-find からのお知らせ\n"]
+    # notify_count は送信前の値。MAX_NOTIFY_COUNT - 1 以上なら最終通知
+    final_items  = [i for i in items if i["notify_count"] >= MAX_NOTIFY_COUNT - 1]
+    normal_items = [i for i in items if i["notify_count"] <  MAX_NOTIFY_COUNT - 1]
 
-    for item in items:
-        title = item.get("title") or "（タイトルなし）"
-        count = item["notify_count"] + 1  # 今回の通知で +1 した回数
-        is_last = count >= MAX_NOTIFY_COUNT
+    lines = []
 
-        if is_last:
-            # ── 最終通知（6回目）：特別な文面 ──
-            lines.append("📌 最後のお知らせです")
-            lines.append(f"🔖 {title}")
-            lines.append(
-                f"この情報は保存され、これまでに {count}回 お知らせしました。"
-            )
-            lines.append("今回が最後の通知です。")
-            lines.append("まだ気になるなら、Webアプリで「未対応」に戻せます。")
-            lines.append("")
-        else:
-            # ── 通常通知 ──
-            lines.append(f"🔖 {title}（{count}回目）")
+    # ── 通常通知ブロック ──
+    if normal_items:
+        lines.append(f"📬 {len(normal_items)}件の情報が待っています\n")
+
+        for item in normal_items:
+            count    = item["notify_count"] + 1
+            category = item["category_name"]
+            title    = item.get("title") or "（タイトルなし）"
+
+            lines.append(f"📁 {category}｜{count}回目")
+            lines.append(title)
             lines.append("")
 
-    # 全アイテム共通のリンク（外部ブラウザで開く）
+    # ── 最終通知ブロック ──
+    if final_items:
+        if normal_items:
+            lines.append("─────────────────")
+
+        lines.append("📌 最後のリマインドです\n")
+
+        if len(final_items) > 1:
+            lines.append("以下の情報への通知が今回で終わります。\n")
+
+        for item in final_items:
+            category = item["category_name"]
+            title    = item.get("title") or "（タイトルなし）"
+            days_ago = calc_days_since(item["created_at"])
+
+            lines.append(f"📁 {category}")
+            lines.append(f"{title}（{days_ago}日前）")
+            lines.append("")
+
+        lines.append("まだ気になるものは「未対応」に戻せます。")
+
+        if normal_items:
+            lines.append("─────────────────")
+
+    # ── Webアプリへのリンク ──
+    lines.append("")
     lines.append(f"▶ Webアプリで確認する\n{WEB_URL}")
     return "\n".join(lines)
 
@@ -167,6 +211,11 @@ def send_line_message(line_user_id, text):
 
 # ── メイン処理 ─────────────────────────────────────
 def main():
+    dry_run = "--dry-run" in sys.argv
+
+    if dry_run:
+        log.info("DRY RUN モード（送信・DB更新はしません）")
+
     log.info("=== notify.py 開始 ===")
 
     # 1. 通知対象を取得
@@ -179,6 +228,10 @@ def main():
 
     # 2. ユーザーごとにまとめる（1ユーザー = 1通）
     grouped = group_by_user(items)
+    log.info(f"通知対象ユーザー: {len(grouped)} 人")
+
+    success_count = 0
+    fail_count = 0
 
     for line_user_id, user_items in grouped.items():
 
@@ -195,18 +248,40 @@ def main():
 
         # 4. メッセージを組み立てて送信
         message = build_message(user_items)
+
+        if dry_run:
+            log.info(f"[DRY RUN] 送信先: {line_user_id} ({len(user_items)}件)")
+            log.info(f"メッセージ内容:\n{message}")
+            success_count += 1
+            continue
+
         try:
             send_line_message(line_user_id, message)
             log.info(f"送信OK: {line_user_id} ({len(user_items)}件)")
+            success_count += 1
         except Exception as e:
             log.error(f"送信失敗: {line_user_id} - {e}")
+            fail_count += 1
             continue  # 送信失敗したユーザーのアイテムは更新しない
 
         # 5. 送信成功 → notify_count と next_notify_at を更新
         for item in user_items:
             update_item(item)
 
-    log.info("=== notify.py 完了 ===")
+        # 6. 通知ログを記録
+        item_ids = [i["id"] for i in user_items]
+        log_activity(
+            line_user_id,
+            "notification_sent",
+            metadata={"item_ids": item_ids, "count": len(item_ids)},
+        )
+
+    # ── 結果サマリー ──
+    log.info(
+        f"=== notify.py 完了 === "
+        f"成功: {success_count}人 / 失敗: {fail_count}人 / "
+        f"処理アイテム合計: {len(items)}件"
+    )
 
 
 if __name__ == "__main__":
