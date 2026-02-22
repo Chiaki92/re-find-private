@@ -6,6 +6,7 @@
 
 import os  # 環境変数を読み込むためのライブラリ
 import re  # URL判定の正規表現に使用（B-4-2）
+import json  # items_json の生成に使用（C-1）
 import uuid
 import secrets  # CSRF対策用（B-5）
 from functools import wraps  # login_required デコレータ用（B-5）
@@ -541,6 +542,50 @@ def create_share_link(item_id):
     except Exception as e:
         print(f"共有リンク作成エラー: {e}")
         return {"error": str(e)}, 500
+
+
+# ============================================
+# 共有リンク閲覧ページ（C-4：ログイン不要）
+# ============================================
+
+@app.route("/share/<token>")
+def shared_item_page(token):
+    """共有リンク閲覧ページ（ログイン不要）"""
+
+    # service_role_key でRLSバイパスしてデータ取得
+    try:
+        # トークンから共有リンク情報を取得
+        link = supabase_admin.table("shared_links") \
+            .select("item_id") \
+            .eq("token", token) \
+            .execute()
+
+        if not link.data:
+            # トークンが見つからない → 無効なリンク
+            return render_template("shared_item.html", item=None)
+
+        item_id = link.data[0]["item_id"]
+
+        # アイテム情報を取得
+        item = supabase_admin.table("items") \
+            .select("*, categories(name)") \
+            .eq("id", item_id) \
+            .is_("deleted_at", "null") \
+            .execute()
+
+        if not item.data:
+            return render_template("shared_item.html", item=None)
+
+        # カテゴリ名を整形
+        item_data = item.data[0]
+        cat = item_data.pop("categories", None)
+        item_data["category_name"] = cat["name"] if cat else "未分類"
+
+        return render_template("shared_item.html", item=item_data)
+
+    except Exception as e:
+        print(f"共有リンクエラー: {e}")
+        return render_template("shared_item.html", item=None)
 
 
 # ============================================
