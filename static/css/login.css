@@ -1,0 +1,127 @@
+/* ==========================================================
+   Re:find — login.css
+   ログイン画面専用のスタイル
+   
+   ■ デザイン方針：
+     - 画面全体を使って中央に要素を配置
+     - 背景にうっすらグラデーション（温かみ）
+     - ロゴ → キャッチコピー → 3ステップ → LINEボタン の縦並び
+   ========================================================== */
+
+
+/* ===== ログイン画面全体のコンテナ ===== */
+.login-container {
+    /* 画面全体の高さを使う */
+    min-height: 100vh;
+    
+    /* 中央寄せ（縦横両方） */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    
+    /* 背景にうっすらグラデーション */
+    background: linear-gradient(180deg, var(--color-bg) 0%, #F3EDE4 100%);
+    
+    padding: 40px 24px;
+    text-align: center;
+}
+
+
+/* ===== 「information rediscovery」の小さい英字 ===== */
+.login-tagline {
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+
+/* ===== アプリ名「Re:find」 ===== */
+.login-title {
+    font-family: var(--font-display);  /* Outfit フォント */
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--color-text);
+    letter-spacing: -1px;
+    margin-bottom: 4px;
+}
+
+/* 「find」の部分だけコーラル色 */
+.login-title-accent {
+    color: var(--color-primary);
+}
+
+
+/* ===== キャッチコピー ===== */
+.login-subtitle {
+    font-size: 14px;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin-bottom: 4px;
+}
+
+
+/* ===== 3ステップ（保存 → 忘れる → 再発見） ===== */
+.login-steps {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin: 24px 0 36px;
+    padding: 14px 24px;
+    background-color: var(--color-card);
+    border-radius: 16px;
+    border: 1px solid var(--color-card-border);
+}
+
+/* 各ステップのアイコン */
+.login-step-icon {
+    font-size: 22px;
+    text-align: center;
+}
+
+/* 各ステップのラベル（「保存」「忘れる」「再発見」） */
+.login-step-label {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    text-align: center;
+}
+
+/* ステップ間の「→」矢印 */
+.login-step-arrow {
+    font-size: 16px;
+    color: var(--color-text-muted);
+}
+
+
+/* ===== LINEログインボタン ===== */
+.login-btn-wrapper {
+    width: 100%;
+    max-width: 280px;
+}
+
+.login-note {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-top: 16px;
+    line-height: 1.5;
+}
+
+
+/* ===== フェードインアニメーション ===== */
+.login-fade-in {
+    animation: loginFadeIn 0.6s ease;
+}
+
+@keyframes loginFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

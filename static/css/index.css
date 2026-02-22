@@ -1,0 +1,235 @@
+/* ==========================================================
+   Re:find — index.css
+   一覧画面（メイン画面）専用のスタイル
+   
+   ■ 含まれるもの：
+     1. カテゴリフィルタタブ（横スクロール）
+     2. タイルカード一覧（CSS Grid 2列）
+     3. 個別カードのデザイン
+     4. 空の状態（アイテム0件のとき）
+     5. レスポンシブ対応（スマホ2列→タブレット3列→PC4列）
+   ========================================================== */
+
+
+/* ----------------------------------------------------------
+   1. カテゴリフィルタタブ
+   
+   「すべて」「子どもの習い事」「記事」... を横並びにする。
+   タブが多いときは横スクロールで対応する。
+   ---------------------------------------------------------- */
+
+.category-tabs-wrapper {
+    /* 左右の余白をはみ出させて、端のタブが見切れないようにする */
+    margin: 0 -12px;
+    padding: 12px 12px 8px;
+}
+
+.category-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;               /* 横スクロール可能にする */
+    -webkit-overflow-scrolling: touch;  /* iOS のスムーズスクロール */
+    padding-bottom: 4px;            /* スクロールバーのスペース */
+}
+
+/* スクロールバーを非表示にする（見た目をスッキリ） */
+.category-tabs::-webkit-scrollbar {
+    display: none;
+}
+.category-tabs {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* 個々のタブボタン */
+.category-tab {
+    /* 文字が改行されないようにする */
+    white-space: nowrap;
+    flex-shrink: 0;             /* タブが縮まないようにする */
+    
+    /* 見た目 */
+    background-color: var(--color-tab-bg);
+    color: var(--color-text-muted);
+    border: none;
+    border-radius: 20px;       /* 丸いピル形 */
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+/* ホバー時 */
+.category-tab:hover {
+    background-color: #E5DDD4;
+}
+
+/* アクティブ（選択中）のタブ */
+.category-tab.active {
+    background-color: var(--color-tab-active);  /* コーラル */
+    color: #fff;
+    font-weight: 700;
+    box-shadow: var(--color-primary-glow);      /* ふんわり光る影 */
+}
+
+
+/* ----------------------------------------------------------
+   2. タイルカード一覧（CSS Grid）
+   
+   カードを2列で並べる。タブレット以上では3列、PCでは4列。
+   ---------------------------------------------------------- */
+
+.item-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);  /* 2列均等 */
+    gap: 12px;                              /* カード間の隙間 */
+    padding-top: 8px;
+}
+
+/* タブレット（576px以上）：3列 */
+@media (min-width: 576px) {
+    .item-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* PC（992px以上）：4列、最大幅制限 */
+@media (min-width: 992px) {
+    .item-grid {
+        grid-template-columns: repeat(4, 1fr);
+        max-width: 900px;
+        margin: 0 auto;
+    }
+}
+
+
+/* ----------------------------------------------------------
+   3. 個別のカード
+   
+   各アイテム1枚ずつのカード。
+   サムネイル部分 + 情報部分（タイトル、カテゴリ、日付）で構成。
+   ---------------------------------------------------------- */
+
+.item-card {
+    background-color: var(--color-card);
+    border-radius: var(--card-radius);
+    overflow: hidden;                   /* 角丸からはみ出す画像をカット */
+    border: 1px solid var(--color-card-border);
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    position: relative;                 /* 「対応済み」バッジの位置基準 */
+}
+
+/* タップしたとき少し縮む（フィードバック） */
+.item-card:active {
+    transform: scale(0.97);
+}
+
+/* ホバー時（PC向け） */
+.item-card:hover {
+    box-shadow: var(--card-shadow-hover);
+}
+
+/* 対応済みアイテムは薄く表示 */
+.item-card[data-status="done"] {
+    opacity: 0.5;
+}
+
+
+/* --- カードのサムネイル部分 --- */
+.item-card-thumb {
+    width: 100%;
+    aspect-ratio: 4 / 3;              /* 縦横比を固定（ガタガタ防止） */
+    overflow: hidden;
+    background-color: #F0EBE3;         /* 画像読み込み前の背景色 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.item-card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;                 /* 画像をカード枠に合わせてトリミング */
+}
+
+/* 画像がないときのアイコン */
+.item-card-icon {
+    font-size: 2rem;
+}
+
+
+/* --- カードの情報部分 --- */
+.item-card-body {
+    padding: 10px 12px 12px;
+}
+
+/* タイトル（2行で省略） */
+.item-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 6px;
+    line-height: 1.4;
+    
+    /* 2行で「...」をつけて省略する CSS テクニック */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* カテゴリバッジ */
+.item-card-category {
+    /* badge-category は common.css で定義済み */
+}
+
+/* 保存日 */
+.item-card-date {
+    display: block;
+    font-size: 10px;
+    color: var(--color-text-muted);
+    margin-top: 4px;
+}
+
+/* 「対応済み」バッジ（カード右上） */
+.item-card-done-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(61, 50, 41, 0.7);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+
+/* ----------------------------------------------------------
+   4. 空の状態（アイテムが0件のとき）
+   ---------------------------------------------------------- */
+
+.empty-state {
+    grid-column: 1 / -1;    /* グリッドの全列を使う */
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+}
+
+.empty-state-text {
+    color: var(--color-text-muted);
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.empty-state-hint {
+    color: #D4C4B0;
+    font-size: 12px;
+}

@@ -1,50 +1,81 @@
-<!-- templates/base.html -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ===== スマホ対応の必須設定 =====
+         width=device-width  → 画面幅に合わせる
+         initial-scale=1.0   → 初期ズーム100%
+         viewport-fit=cover  → iPhoneのノッチ領域まで使う -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- ページタイトル（各ページで上書き可能） -->
     <title>{% block title %}Re:find{% endblock %}</title>
 
-    <!-- Bootstrap 5 CDN -->
+    <!-- ===== Bootstrap 5 CDN =====
+         CSSフレームワーク。グリッド、ボタン、フォームなどが使える -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
           rel="stylesheet">
-    <!-- Bootstrap Icons（アイコン用） -->
+
+    <!-- ===== Bootstrap Icons =====
+         アイコンフォント。<i class="bi bi-trash"></i> のように使う -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
           rel="stylesheet">
 
-    <!-- 共通CSS -->
+    <!-- ===== Re:find 共通CSS =====
+         カラー変数、フォント、ヘッダー、ボタンなどの共通スタイル -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
-    <!-- ページ固有CSS -->
+
+    <!-- ===== ページ固有のCSS =====
+         各ページがここに自分専用のCSSを追加する -->
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- ===== ヘッダー ===== -->
+
+    {# ===== ヘッダー =====
+         ログイン画面では非表示にしたいので、block で囲む。
+         login.html では {% block header %}{% endblock %} と空にする。 #}
     {% block header %}
-    <nav class="navbar navbar-light bg-white border-bottom px-3">
-        <a class="navbar-brand fw-bold" href="/">Re:find</a>
-        <div>
-            <a href="/categories" class="btn btn-sm btn-outline-secondary me-2">
+    <nav class="refind-header">
+        <!-- 左側：ロゴ -->
+        <a href="/" class="refind-logo">
+            Re:<span class="refind-logo-accent">find</span>
+        </a>
+
+        <!-- 右側：ボタン群 -->
+        <div class="refind-header-actions">
+            <!-- カテゴリ管理ページへのリンク -->
+            <a href="/categories" class="btn-category-manage">
                 <i class="bi bi-folder"></i> カテゴリ管理
             </a>
-            <button id="logout-btn" class="btn btn-sm btn-outline-danger">
+            <!-- ログアウトボタン -->
+            <button id="logout-btn" class="btn-logout">
                 ログアウト
             </button>
         </div>
     </nav>
     {% endblock %}
 
-    <!-- ===== メインコンテンツ ===== -->
-    <main class="container-fluid px-3 py-3">
+    <!-- ===== メインコンテンツ =====
+         各ページがここに中身を書く -->
+    <main class="refind-content">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
-    </script>
-    <!-- 共通JS -->
+    <!-- ===== トースト通知用コンテナ =====
+         common.js の showToast() がここにメッセージを追加する -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- ===== Bootstrap JavaScript =====
+         ドロップダウン、モーダルなどの動的機能に必要 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- ===== Re:find 共通JavaScript =====
+         API通信の共通関数、ログアウト処理、トースト通知 -->
     <script src="{{ url_for('static', filename='js/common.js') }}"></script>
-    <!-- ページ固有JS -->
+
+    <!-- ===== ページ固有のJavaScript =====
+         各ページがここに自分専用のJSを追加する -->
     {% block extra_js %}{% endblock %}
+
 </body>
 </html>

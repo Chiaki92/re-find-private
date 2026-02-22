@@ -1,0 +1,84 @@
+{# ==========================================================
+   Re:find — categories.html
+   カテゴリ管理画面
+   
+   ■ この画面の役割：
+     - カテゴリの一覧表示
+     - カテゴリ名のインライン編集
+     - カテゴリの削除
+     - 新しいカテゴリの追加
+   
+   ■ Flask から渡されるデータ：
+     - categories : [{ id, name, item_count }, ...]
+   ========================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Re:find - カテゴリ管理{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/categories.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<h2 class="categories-title">カテゴリ管理</h2>
+
+<!-- ===== 新規カテゴリ追加 ===== -->
+<div class="category-add-form">
+    <input type="text" id="new-category-input"
+           class="category-add-input"
+           placeholder="新しいカテゴリ名">
+    <button id="add-category-btn" class="category-add-btn">
+        + 追加
+    </button>
+</div>
+
+<!-- ===== カテゴリ一覧 ===== -->
+<div class="category-list" id="category-list">
+    {% for category in categories %}
+    <div class="category-item" data-category-id="{{ category.id }}">
+
+        <!-- カテゴリ名（直接編集可能） -->
+        <input type="text"
+               class="category-name-input"
+               value="{{ category.name }}"
+               data-original-name="{{ category.name }}"
+               {% if category.name == '未分類' %}readonly{% endif %}>
+
+        <!-- アイテム件数 -->
+        <span class="category-count">
+            {{ category.item_count or 0 }}件
+        </span>
+
+        <!-- 削除ボタン or 固定バッジ -->
+        {% if category.name == '未分類' %}
+            <span class="category-locked">
+                <i class="bi bi-lock"></i> 固定
+            </span>
+        {% else %}
+            <button class="category-delete-btn" title="削除">
+                🗑
+            </button>
+        {% endif %}
+
+    </div>
+    {% endfor %}
+</div>
+
+<!-- 注意書き -->
+<p class="categories-note">
+    カテゴリを削除すると、そのカテゴリのアイテムは<br>
+    「未分類」に移動します
+</p>
+
+<!-- 一覧に戻る -->
+<a href="/" class="categories-back">
+    <i class="bi bi-arrow-left"></i> 一覧に戻る
+</a>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/categories.js') }}"></script>
+{% endblock %}

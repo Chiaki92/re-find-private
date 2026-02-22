@@ -1,0 +1,354 @@
+/* ==========================================================
+   Re:find — common.css
+   全ページ共通のスタイル定義
+   
+   ■ このファイルの役割：
+     - CSS変数（カラーパレット）の一元管理
+     - Google Fonts の読み込み
+     - body, リンク, ボタンなどの基本スタイル
+     - ヘッダー（ナビバー）のスタイル
+     - トースト通知のスタイル
+     - iOS対策（セーフエリア、自動ズーム防止）
+   
+   ■ デザインテーマ：ウォームベージュ × コーラルアクセント
+   ========================================================== */
+
+
+/* ----------------------------------------------------------
+   1. Google Fonts の読み込み
+   
+   Outfit     … ロゴ・見出し用（英字の太字がきれい）
+   Noto Sans JP … 日本語の本文・UI用（読みやすい）
+   ---------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+
+/* ----------------------------------------------------------
+   2. CSS カスタムプロパティ（カラー変数）
+   
+   ■ 使い方：color: var(--color-primary);
+   ■ ここを変えるだけで全ページの色が一括で変わる
+   ---------------------------------------------------------- */
+:root {
+    /* === メインカラー === */
+    --color-primary: #D4805A;          /* コーラルオレンジ（ボタン・タブ・リンク） */
+    --color-primary-dark: #C06A42;     /* ホバー時の濃いコーラル */
+    --color-primary-light: #FCEEE7;    /* コーラルの薄い背景（タグ、ハイライト） */
+    --color-primary-glow: 0 4px 20px rgba(212, 128, 90, 0.25);  /* ボタンの光る影 */
+
+    /* === ステータスカラー === */
+    --color-success: #06C755;          /* LINE緑 / 成功 / 対応済み */
+    --color-success-light: #E8F9EE;    /* 成功の薄い背景 */
+    --color-danger: #D94F4F;           /* 削除 / エラー */
+    --color-danger-light: #FEF0F0;     /* エラーの薄い背景 */
+    --color-warning: #E8A840;          /* 注意（必要に応じて使用） */
+
+    /* === テキストカラー === */
+    --color-text: #3D3229;             /* メインのテキスト（ほぼ黒だけど温かみあり） */
+    --color-text-muted: #9B8E80;       /* 補助テキスト（日付、ヒントなど） */
+
+    /* === 背景・カード・枠線 === */
+    --color-bg: #FAF6F1;              /* ページ全体の背景（温かいオフホワイト） */
+    --color-card: #FFFCF8;            /* カードの背景（ほんのりクリーム） */
+    --color-border: #E8E0D6;          /* 枠線・区切り線 */
+    --color-card-border: #EDE5DA;     /* カード専用の枠線（少し薄め） */
+
+    /* === UI部品 === */
+    --color-header-bg: #FFFCF8;       /* ヘッダー背景 */
+    --color-header-border: #EDE5DA;   /* ヘッダー下の線 */
+    --color-tab-bg: #F0EBE3;          /* 非アクティブなタブの背景 */
+    --color-tab-active: #D4805A;      /* アクティブなタブの背景 */
+    --color-input-bg: #FBF7F2;        /* input/textarea の背景 */
+    --color-input-border: #E0D6CA;    /* input/textarea の枠線 */
+    --color-overlay: rgba(40, 30, 20, 0.45);  /* モーダルの暗い背景 */
+
+    /* === カード === */
+    --card-shadow: 0 2px 16px rgba(160, 120, 80, 0.07);     /* カードの影 */
+    --card-shadow-hover: 0 4px 24px rgba(160, 120, 80, 0.12); /* ホバー時 */
+    --card-radius: 14px;              /* カードの角丸 */
+
+    /* === フォント === */
+    --font-body: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-display: 'Outfit', sans-serif;  /* ロゴ・ブランド名用 */
+}
+
+
+/* ----------------------------------------------------------
+   3. 基本スタイル（body, リンク）
+   ---------------------------------------------------------- */
+body {
+    /* ページ全体の背景色とフォント */
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.6;
+
+    /* iOS Safari でセーフエリア（ノッチ）を考慮 */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+
+    /* iOS で input フォーカス時の自動ズームを防止 */
+    -webkit-text-size-adjust: 100%;
+}
+
+/* リンクのデフォルトカラー */
+a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+a:hover {
+    color: var(--color-primary-dark);
+    text-decoration: underline;
+}
+
+/* ボタンやリンクのタップ領域を最低44pxにする（Apple推奨） */
+button, .btn, a.btn {
+    min-height: 44px;
+}
+
+/* input/select/textarea のフォーカス時のアウトライン色 */
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(212, 128, 90, 0.15) !important;
+    outline: none;
+}
+
+/* iOS Safari で input フォーカス時の自動ズームを防ぐ
+   → font-size を 16px 以上にする */
+input, select, textarea {
+    font-size: 16px;
+}
+
+
+/* ----------------------------------------------------------
+   4. ヘッダー（ナビバー）
+   
+   base.html の <nav> に適用される。
+   ロゴはOutfitフォント、「Re:」は黒、「find」はコーラル。
+   ---------------------------------------------------------- */
+.refind-header {
+    background-color: var(--color-header-bg);
+    border-bottom: 1px solid var(--color-header-border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;       /* スクロールしても上部に固定 */
+    top: 0;
+    z-index: 50;            /* モーダルより低く、コンテンツより高く */
+}
+
+/* ロゴ部分 */
+.refind-logo {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--color-text);
+    text-decoration: none;
+}
+.refind-logo:hover {
+    text-decoration: none;
+}
+/* 「find」の部分だけコーラルにする */
+.refind-logo-accent {
+    color: var(--color-primary);
+}
+
+/* ヘッダー右側のボタン群 */
+.refind-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* カテゴリ管理ボタン */
+.btn-category-manage {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.btn-category-manage:hover {
+    background-color: #F8DFD2;
+    color: var(--color-primary-dark);
+}
+
+/* ログアウトボタン */
+.btn-logout {
+    background-color: transparent;
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-logout:hover {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+}
+
+
+/* ----------------------------------------------------------
+   5. 共通ボタンスタイル
+   
+   Bootstrap のボタンを上書きして、
+   Re:find のデザインテーマに合わせる。
+   ---------------------------------------------------------- */
+
+/* プライマリボタン（メインアクション） */
+.btn-refind-primary {
+    background-color: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: var(--color-primary-glow);
+    transition: all 0.2s;
+}
+.btn-refind-primary:hover {
+    background-color: var(--color-primary-dark);
+    color: #fff;
+    transform: translateY(-1px);
+}
+.btn-refind-primary:active {
+    transform: translateY(0);
+}
+
+/* LINEログインボタン */
+.btn-line {
+    background-color: var(--color-success);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(6, 199, 85, 0.25);
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.btn-line:hover {
+    background-color: #05b54c;
+    color: #fff;
+}
+.btn-line:active {
+    transform: scale(0.97);
+}
+
+
+/* ----------------------------------------------------------
+   6. トースト通知
+   
+   操作後に画面上部に表示される一時メッセージ。
+   例：「保存しました」「削除しました」
+   common.js の showToast() 関数から使う。
+   ---------------------------------------------------------- */
+.toast-container {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    pointer-events: none;      /* トーストの後ろをクリックできるように */
+}
+
+.toast-message {
+    background-color: var(--color-text);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    animation: toastIn 0.3s ease, toastOut 0.3s ease 2.5s forwards;
+}
+
+/* トーストの表示アニメーション */
+@keyframes toastIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* トーストの非表示アニメーション（2.5秒後に自動で消える） */
+@keyframes toastOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+}
+
+
+/* ----------------------------------------------------------
+   7. バッジ（カテゴリタグ）
+   
+   カテゴリ名を表示する小さなラベル。
+   コーラルの薄い背景＋濃いコーラル文字。
+   ---------------------------------------------------------- */
+.badge-category {
+    display: inline-block;
+    background-color: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+
+/* ----------------------------------------------------------
+   8. スクロールバーのカスタマイズ
+   
+   横スクロール（カテゴリタブ）のスクロールバーを非表示にする。
+   ---------------------------------------------------------- */
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.hide-scrollbar {
+    -ms-overflow-style: none;   /* IE, Edge */
+    scrollbar-width: none;      /* Firefox */
+}
+
+
+/* ----------------------------------------------------------
+   9. ユーティリティ
+   ---------------------------------------------------------- */
+
+/* コンテンツエリアの余白 */
+.refind-content {
+    padding: 0 12px 24px;
+}
+
+/* PCで幅が広がりすぎないように制限 */
+@media (min-width: 768px) {
+    .refind-content {
+        max-width: 700px;
+        margin: 0 auto;
+    }
+}

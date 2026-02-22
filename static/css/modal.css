@@ -1,0 +1,285 @@
+/* ==========================================================
+   Re:find — modal.css
+   編集モーダル専用のスタイル
+   
+   ■ デザイン方針：
+     - スマホ：画面下からスライドアップするボトムシート
+     - PC：画面中央に表示
+     - Bootstrap のモーダルは使わず自作（UX制御のため）
+   ========================================================== */
+
+
+/* ===== オーバーレイ（暗い背景） ===== */
+.edit-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--color-overlay);  /* 半透明の暗い背景 */
+    z-index: 100;                            /* ヘッダーより上 */
+    
+    /* モーダル本体を下に配置 */
+    display: flex;
+    align-items: flex-end;      /* スマホ：下揃え */
+    justify-content: center;
+}
+
+
+/* ===== モーダル本体 ===== */
+.edit-modal-content {
+    background-color: var(--color-card);
+    width: 100%;
+    max-width: 500px;
+    max-height: 85vh;                       /* 画面の85%まで */
+    border-radius: 20px 20px 0 0;           /* 上の角だけ丸い */
+    overflow-y: auto;                       /* 内容が多ければスクロール */
+    animation: modalSlideUp 0.3s ease;      /* 下からスライドアップ */
+}
+
+/* PC表示（576px以上）では中央に表示 */
+@media (min-width: 576px) {
+    .edit-modal-overlay {
+        align-items: center;    /* 中央寄せに変更 */
+    }
+    .edit-modal-content {
+        border-radius: 20px;    /* 全角丸い */
+        max-height: 80vh;
+    }
+}
+
+/* 下からスライドアップするアニメーション */
+@keyframes modalSlideUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+
+/* ===== モーダルヘッダー ===== */
+.edit-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* ✕ 閉じるボタン */
+.edit-modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+}
+.edit-modal-close-btn:hover {
+    background-color: var(--color-tab-bg);
+}
+
+/* 「対応済みにする」ボタン */
+.edit-modal-done-btn {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.edit-modal-done-btn:hover {
+    background-color: #D4F5E0;
+}
+/* 既に対応済みのとき（テキストが「未対応に戻す」になる） */
+.edit-modal-done-btn.is-done {
+    background-color: var(--color-tab-bg);
+    color: var(--color-text-muted);
+}
+
+
+/* ===== モーダル本体 ===== */
+.edit-modal-body {
+    padding: 16px;
+}
+
+
+/* ===== サムネイル表示エリア ===== */
+.edit-modal-thumb {
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    border: 1px solid var(--color-border);
+    background-color: #F0EBE3;
+}
+
+.edit-modal-thumb img {
+    width: 100%;
+    max-height: 300px;
+    object-fit: contain;  /* モーダルでは全体を見せる（coverではなく） */
+}
+
+/* 画像なしのときのアイコン */
+.edit-modal-thumb-icon {
+    font-size: 3rem;
+    text-align: center;
+    padding: 40px;
+}
+
+
+/* ===== フォーム要素の共通スタイル ===== */
+
+/* ラベル */
+.edit-modal-label {
+    display: block;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+/* テキストinput */
+.edit-modal-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-input-border);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--color-text);
+    background-color: var(--color-input-bg);
+    outline: none;
+    box-sizing: border-box;
+    margin-bottom: 14px;
+    font-family: var(--font-body);
+}
+
+/* セレクトボックス（カテゴリ選択） */
+.edit-modal-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-input-border);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--color-text);
+    background-color: var(--color-input-bg);
+    outline: none;
+    margin-bottom: 14px;
+    
+    /* カスタムの下矢印アイコン */
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg fill='%239B8E80' height='20' viewBox='0 0 24 24' width='20' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 36px;
+}
+
+/* テキストエリア（メモ） */
+.edit-modal-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-input-border);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--color-text);
+    background-color: var(--color-input-bg);
+    outline: none;
+    resize: vertical;       /* 縦方向のみリサイズ可能 */
+    font-family: var(--font-body);
+    box-sizing: border-box;
+    margin-bottom: 14px;
+}
+
+/* 元のURL表示 */
+.edit-modal-url {
+    display: block;
+    font-size: 13px;
+    color: var(--color-primary);
+    word-break: break-all;
+    margin-bottom: 14px;
+}
+
+/* 保存日 */
+.edit-modal-date {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-bottom: 16px;
+}
+
+
+/* ===== 共有リンク作成ボタン ===== */
+.edit-modal-share-btn {
+    width: 100%;
+    padding: 11px;
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+.edit-modal-share-btn:hover {
+    background-color: #F8DFD2;
+}
+
+/* コピー成功後の状態 */
+.edit-modal-share-btn.copied {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    border-color: var(--color-success);
+}
+
+
+/* ===== モーダルフッター ===== */
+.edit-modal-footer {
+    display: flex;
+    gap: 10px;
+    padding: 12px 16px 20px;
+    border-top: 1px solid var(--color-border);
+}
+
+/* 削除ボタン（左側・小さめ） */
+.edit-modal-delete-btn {
+    flex: 1;
+    padding: 12px;
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.edit-modal-delete-btn:hover {
+    background-color: #FCD8D8;
+}
+
+/* 保存ボタン（右側・大きめ・コーラル） */
+.edit-modal-save-btn {
+    flex: 2;
+    padding: 12px;
+    background-color: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: var(--color-primary-glow);
+    transition: all 0.2s;
+}
+.edit-modal-save-btn:hover {
+    background-color: var(--color-primary-dark);
+}

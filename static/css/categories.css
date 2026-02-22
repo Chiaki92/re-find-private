@@ -1,0 +1,146 @@
+/* ==========================================================
+   Re:find — categories.css
+   カテゴリ管理画面専用のスタイル
+   ========================================================== */
+
+
+/* ===== ページタイトル ===== */
+.categories-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 20px;
+    padding-top: 16px;
+}
+
+
+/* ===== 新規カテゴリ追加エリア ===== */
+.category-add-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.category-add-input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--color-input-border);
+    border-radius: 10px;
+    font-size: 14px;
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    outline: none;
+    font-family: var(--font-body);
+}
+
+.category-add-btn {
+    background-color: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+.category-add-btn:hover {
+    background-color: var(--color-primary-dark);
+}
+
+
+/* ===== カテゴリ一覧 ===== */
+.category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+
+/* ===== 個別のカテゴリ行 ===== */
+.category-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: var(--color-card);
+    border: 1px solid var(--color-card-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: var(--card-shadow);
+}
+
+/* カテゴリ名の入力フィールド（インライン編集用） */
+.category-name-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    color: var(--color-text);
+    font-weight: 500;
+    outline: none;
+    font-family: var(--font-body);
+    padding: 4px 0;
+}
+/* フォーカス時に下線を表示 */
+.category-name-input:focus {
+    border-bottom: 2px solid var(--color-primary);
+    box-shadow: none !important;
+}
+
+/* アイテム件数バッジ */
+.category-count {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background-color: var(--color-tab-bg);
+    padding: 2px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+/* 「固定」バッジ（未分類カテゴリ用） */
+.category-locked {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background-color: var(--color-tab-bg);
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* 削除ボタン */
+.category-delete-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+.category-delete-btn:hover {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
+
+/* ===== 注意書き ===== */
+.categories-note {
+    font-size: 11px;
+    color: #D4C4B0;
+    text-align: center;
+    margin-top: 24px;
+    line-height: 1.6;
+}
+
+
+/* ===== 一覧に戻るリンク ===== */
+.categories-back {
+    display: block;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--color-primary);
+}

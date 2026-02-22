@@ -1,0 +1,102 @@
+{# ==========================================================
+   Re:find — shared_item.html
+   共有リンク閲覧ページ（ログイン不要）
+   
+   ■ この画面の役割：
+     - 共有リンクでアクセスした人に1アイテムを表示
+     - ログイン不要（Flask側でservice_role_keyを使ってデータ取得）
+     - JavaScriptは不要（表示するだけ）
+   
+   ■ Flask から渡されるデータ：
+     - item : アイテム情報（None の場合はリンク無効）
+   ========================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Re:find - 共有アイテム{% endblock %}
+
+{# ヘッダーを共有ページ用に上書き（ログインボタンなし） #}
+{% block header %}
+<div class="shared-header">
+    <span class="shared-header-logo">
+        Re:<span class="refind-logo-accent">find</span>
+    </span>
+    <span class="shared-header-label">共有アイテム</span>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="shared-container">
+
+    {% if item %}
+    <!-- ===== アイテムが存在する場合 ===== -->
+    <div class="shared-card">
+
+        <!-- サムネイル -->
+        {% if item.image_url %}
+        <div class="shared-thumb">
+            <img src="{{ item.image_url }}" alt="">
+        </div>
+        {% elif item.ogp_image %}
+        <div class="shared-thumb">
+            <img src="{{ item.ogp_image }}" alt="">
+        </div>
+        {% endif %}
+
+        <div class="shared-body">
+            <!-- タイトル -->
+            <h2 class="shared-title">{{ item.title or '（タイトルなし）' }}</h2>
+
+            <!-- カテゴリバッジ -->
+            <span class="badge-category" style="margin-bottom: 12px;">
+                {{ item.category_name or '未分類' }}
+            </span>
+
+            <!-- メモ（ある場合のみ表示） -->
+            {% if item.memo %}
+            <div class="shared-memo">
+                <div class="shared-memo-label">メモ</div>
+                <p class="shared-memo-text">{{ item.memo }}</p>
+            </div>
+            {% endif %}
+
+            <!-- 元のURL（URLタイプのみ表示） -->
+            {% if item.original_url %}
+            <a href="{{ item.original_url }}" target="_blank" class="shared-url">
+                🔗 {{ item.original_url }}
+            </a>
+            {% endif %}
+
+            <!-- 保存日 -->
+            <div class="shared-date">
+                保存日：{{ item.created_at | dateformat }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Re:find 宣伝 -->
+    <p class="shared-promo">
+        このアイテムは共有リンクで閲覧しています<br>
+        <a href="/">Re:find で自分の情報も管理してみませんか？</a>
+    </p>
+
+    {% else %}
+    <!-- ===== リンクが無効な場合 ===== -->
+    <div class="shared-invalid">
+        <div class="shared-invalid-icon">🔗</div>
+        <p class="shared-invalid-text">このリンクは無効です</p>
+        <p class="shared-invalid-text" style="font-size: 12px; margin-top: 8px;">
+            アイテムが削除されたか、リンクの有効期限が切れた可能性があります
+        </p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{# 共有ページにはJavaScript不要 #}
+{% block extra_js %}{% endblock %}

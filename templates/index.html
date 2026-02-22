@@ -1,5 +1,20 @@
-<!DOCTYPE html>
-<html>
-<head><title>Re:find</title></head>
-<body><h1>Re:find</h1><p>Hello!</p></body>
-</html>
+{# ========================================================== Re:find — index.html 一覧画面（メイン画面） ■ この画面の役割： - 保存したアイテムをタイルカードで一覧表示 - カテゴリタブでフィルタリング - カードをタップ → 編集モーダルが開く ■ Flask から渡されるデータ： - categories : カテゴリ一覧 [{ id, name }, ...] - items : アイテム一覧 [{ id, title, type, status, ... }, ...] - items_json : items の JSON文字列（JSで使う） ========================================================== #} {% extends "base.html" %} {% block title %}Re:find - ホーム{% endblock %} {% block extra_css %} {% endblock %} {% block content %}
+すべて {% for category in categories %} {{ category.name }} {% endfor %}
+{% if items | length == 0 %}
+📭
+まだアイテムがありません
+
+LINEで情報を送ってみましょう！
+
+{% else %} {% for item in items %}
+{% if item.type == 'image' and item.image_url %}  {% elif item.type == 'url' and item.ogp_image %}  {% else %}
+{% if item.type == 'image' %}📷 {% elif item.type == 'url' %}🔗 {% else %}📝 {% endif %}
+{% endif %}
+{{ item.title or '（タイトルなし）' }}
+
+{{ item.category_name or '未分類' }} {{ item.created_at | timeago }}
+{% if item.status == 'done' %}
+✓ 対応済み
+{% endif %}
+{% endfor %} {% endif %}
+{% endblock %} {% block extra_js %} {% endblock %}

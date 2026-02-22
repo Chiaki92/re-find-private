@@ -1,20 +1,77 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Re:find - ログイン</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <div class="container d-flex justify-content-center align-items-center min-vh-100">
-        <div class="text-center">
-            <h1 class="mb-4">Re:find</h1>
-            <p class="text-muted mb-4">保存した情報を、もう一度見つける</p>
-            <a href="/login/line" class="btn btn-success btn-lg px-5 py-3">
-                LINEでログイン
-            </a>
+{# ==========================================================
+   Re:find — login.html
+   ログイン画面
+   
+   ■ この画面の役割：
+     - LINEログインボタンを押してもらうだけ
+     - ヘッダーは非表示（{% block header %} を空にする）
+   
+   ■ 表示要素：
+     1. 小さなタグライン「information rediscovery」
+     2. アプリ名「Re:find」
+     3. キャッチコピー
+     4. 3ステップ説明（保存→忘れる→再発見）
+     5. LINEログインボタン
+   ========================================================== #}
+
+{% extends "base.html" %}
+
+{# ページタイトルを上書き #}
+{% block title %}Re:find - ログイン{% endblock %}
+
+{# ログイン画面ではヘッダー（ナビバー）を非表示にする #}
+{% block header %}{% endblock %}
+
+{# ログイン画面専用のCSS #}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="login-container login-fade-in">
+
+    <!-- ===== タグライン ===== -->
+    <div class="login-tagline">information rediscovery</div>
+
+    <!-- ===== アプリ名 ===== -->
+    <h1 class="login-title">
+        Re:<span class="login-title-accent">find</span>
+    </h1>
+
+    <!-- ===== キャッチコピー ===== -->
+    <p class="login-subtitle">保存した情報を、もう一度見つける</p>
+
+    <!-- ===== 3ステップ説明 =====
+         保存 → 忘れる → 再発見 の流れをアイコンで表示 -->
+    <div class="login-steps">
+        <div>
+            <div class="login-step-icon">📥</div>
+            <div class="login-step-label">保存</div>
+        </div>
+        <div class="login-step-arrow">→</div>
+        <div>
+            <div class="login-step-icon">💤</div>
+            <div class="login-step-label">忘れる</div>
+        </div>
+        <div class="login-step-arrow">→</div>
+        <div>
+            <div class="login-step-icon">✨</div>
+            <div class="login-step-label">再発見</div>
         </div>
     </div>
-</body>
-</html>
+
+    <!-- ===== LINEログインボタン =====
+         /auth/login は Flask 側で LINE OAuth にリダイレクトする -->
+    <div class="login-btn-wrapper">
+        <a href="/login/line" class="btn-line w-100">
+            💬 LINEでログイン
+        </a>
+    </div>
+
+    <p class="login-note">LINEアカウントで簡単ログイン</p>
+
+</div>
+{% endblock %}
+
+{# ログイン画面にはJavaScriptは不要 #}
+{% block extra_js %}{% endblock %}
