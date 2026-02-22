@@ -14,6 +14,7 @@ from dotenv import load_dotenv  # .env を読むため
 from flask import Flask, request, abort, session, redirect, render_template  # Webサーバーの基本機能
 
 from datetime import datetime, timedelta, timezone  # 日時用
+JST = timezone(timedelta(hours=9))  # 日本時間（C-1）
 
 from supabase import create_client  # Supabase接続
 
@@ -65,8 +66,52 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # → この設定がないとブラウザを閉じるたびにログアウトされてしまう
 app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 30  # 30日間
 
-# JST
-JST = timezone(timedelta(hours=9))
+# ============================================
+# Jinja2 カスタムフィルタ（C-1：テンプレート用日時フォーマット）
+# ============================================
+# テンプレート内で {{ item.created_at | timeago }} のように使える
+# → 日時を人間が読みやすい形式に変換する
+
+@app.template_filter('timeago')
+def timeago_filter(value):
+    """日時を「3日前」のような相対表示に変換する Jinja2 フィルタ"""
+    if not value:
+        return ""
+    # 文字列なら datetime に変換（Supabaseから取得した値はISO形式の文字列）
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    now = datetime.now(timezone.utc)
+    diff = now - value
+    minutes = int(diff.total_seconds() / 60)
+    hours = int(diff.total_seconds() / 3600)
+    days = diff.days
+
+    # 経過時間に応じて適切な単位で表示
+    if minutes < 1:
+        return "たった今"
+    elif minutes < 60:
+        return f"{minutes}分前"
+    elif hours < 24:
+        return f"{hours}時間前"
+    elif days < 30:
+        return f"{days}日前"
+    elif days < 365:
+        return f"{days // 30}ヶ月前"
+    else:
+        return f"{days // 365}年前"
+
+
+@app.template_filter('dateformat')
+def dateformat_filter(value):
+    """日時を「2026/02/20」形式（JST）に変換する Jinja2 フィルタ"""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    # UTC → JST に変換してフォーマット
+    jst_time = value.astimezone(JST)
+    return jst_time.strftime("%Y/%m/%d")
+
 
 # ============================================
 # Supabase 管理用クライアント（service_role 用）
@@ -146,9 +191,40 @@ def login_required(f):
 @app.route("/")
 @login_required
 def index():
-    """トップページ（ログイン必須）"""
-    return "Re:find is running."
+    """一覧画面：ログインユーザーのアイテムをタイル表示"""
+    line_user_id = get_current_user_line_id()
 
+    # --- カテゴリ一覧を取得 ---
+    categories = supabase_admin.table("categories") \
+        .select("id, name") \
+        .eq("line_user_id", line_user_id) \
+        .order("created_at") \
+        .execute()
+
+    # --- アイテム一覧を取得 ---
+    # ⚠️ deleted_at IS NULL を忘れると削除済みも表示される
+    items = supabase_admin.table("items") \
+        .select("*, categories(name)") \
+        .eq("line_user_id", line_user_id) \
+        .is_("deleted_at", "null") \
+        .order("created_at", desc=True) \
+        .execute()
+
+    # --- カテゴリ名をアイテムに追加 ---
+    # Supabase のリレーション結果を整形する
+    items_list = []
+    for item in items.data:
+        # categories(name) の結果を取り出す
+        cat = item.pop("categories", None)
+        item["category_name"] = cat["name"] if cat else "未分類"
+        items_list.append(item)
+
+    # --- テンプレートにデータを渡す ---
+    return render_template("index.html",
+        categories=categories.data,    # カテゴリタブ用
+        items=items_list,              # カード表示用
+        items_json=json.dumps(items_list, default=str),  # JS用（モーダル）
+    )
 
 # ============================================
 # ログイン・ログアウト（B-5）
