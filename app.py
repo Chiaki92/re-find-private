@@ -5,8 +5,10 @@
 # AIで分類した結果を返信するコード
 
 import os  # 環境変数を読み込むためのライブラリ
+import sys  # ロガーの stdout 出力用
 import re  # URL判定の正規表現に使用（B-4-2）
 import json  # items_json の生成に使用（C-1）
+import logging  # ロガー設定用
 import uuid
 import secrets  # CSRF対策用（B-5）
 from functools import wraps  # login_required デコレータ用（B-5）
@@ -52,7 +54,36 @@ from activity_logger import log_activity  # 行動ログ記録（B-4-5）
 # ============================================
 load_dotenv()  # これで .env を読み込む（ローカル時のみ）
 
+# ============================================
+# 開発モード設定（ローカル開発用）
+# ============================================
+# DEV_MODE=true を .env に設定すると LINE Login をスキップして
+# 自動的にセッションを設定する（本番では絶対に設定しないこと）
+DEV_MODE = os.environ.get("DEV_MODE", "").lower() == "true"
+DEV_USER_ID = os.environ.get("DEV_USER_ID")       # .env に自分の LINE user ID を設定する
+DEV_DISPLAY_NAME = os.environ.get("DEV_DISPLAY_NAME", "開発ユーザー")
+
+if DEV_MODE:
+    print("\n" + "!" * 60)
+    print("!!! DEV_MODE が有効です - LINE Login をスキップします !!!")
+    print("!!! 本番環境では絶対に DEV_MODE=true を設定しないでください !!!")
+    print("!" * 60 + "\n")
+
 app = Flask(__name__)
+
+# ============================================
+# ロガー設定（ターミナルにログ出力するため）
+# ============================================
+# app.logger に直接ハンドラを追加する
+# sys.stdout に出力（stderr は Windows VSCode で表示されないことがある）
+_log_handler = logging.StreamHandler(sys.stdout)
+_log_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+_log_handler.setLevel(logging.DEBUG)
+app.logger.addHandler(_log_handler)
+app.logger.setLevel(logging.DEBUG if DEV_MODE else logging.INFO)
+app.logger.propagate = False  # ルートロガーとの干渉を防止
+print(f"[DEBUG] ロガーハンドラ: {app.logger.handlers}", flush=True)
+print(f"[DEBUG] ロガーレベル: {app.logger.level}", flush=True)
 
 # ============================================
 # セッション設定（B-5：ログイン状態をブラウザに覚えさせる）
@@ -179,10 +210,29 @@ def login_required(f):
     """
     @wraps(f)  # 元の関数名やdocstringを保持する
     def decorated_function(*args, **kwargs):
+        print(f"[DEBUG] login_required: {f.__name__}, session={dict(session)}", flush=True)
         if not session.get("line_user_id"):
+            print(f"[DEBUG] 未ログイン → /login にリダイレクト", flush=True)
             return redirect("/login")  # 未ログイン → ログイン画面へ
         return f(*args, **kwargs)  # ログイン済み → 元の関数を実行
     return decorated_function
+
+
+# ============================================
+# 開発モード: 自動ログイン（before_request）
+# ============================================
+# DEV_MODE 時、全リクエストの前にセッションを自動設定する。
+# → login_required をパスできるので LINE Login なしで画面を確認できる。
+# ⚠️ if DEV_MODE: で囲んでいるので、本番ではフック自体が登録されない。
+if DEV_MODE:
+    @app.before_request
+    def dev_auto_login():
+        """DEV_MODE 時に LINE Login をスキップして自動的にセッションを設定する"""
+        if not session.get("line_user_id"):
+            session.permanent = True
+            session["line_user_id"] = DEV_USER_ID
+            session["display_name"] = DEV_DISPLAY_NAME
+            app.logger.info(f"[DEV_MODE] 自動ログイン: {DEV_DISPLAY_NAME} ({DEV_USER_ID})")
 
 
 # ============================================
@@ -496,7 +546,7 @@ def update_item(item_id):
             .execute()
         return {"ok": True}
     except Exception as e:
-        print(f"アイテム更新エラー: {e}")
+        app.logger.error(f"アイテム更新エラー: {e}")
         return {"error": str(e)}, 500
 
 
@@ -514,7 +564,7 @@ def delete_item(item_id):
             .execute()
         return {"ok": True}
     except Exception as e:
-        print(f"アイテム削除エラー: {e}")
+        app.logger.error(f"アイテム削除エラー: {e}")
         return {"error": str(e)}, 500
 
 
@@ -528,11 +578,13 @@ def create_share_link(item_id):
     token = str(uuid.uuid4()).replace("-", "")[:16]
 
     try:
+        print(f"[DEBUG] 共有リンク作成開始: item_id={item_id}, user={line_user_id}", flush=True)
         supabase_admin.table("shared_links").insert({
             "line_user_id": line_user_id,
             "item_id": item_id,
             "token": token,
         }).execute()
+        print(f"[DEBUG] 共有リンク作成成功: token={token}", flush=True)
 
         # 共有URLを返す
         base_url = request.host_url.rstrip("/")
@@ -540,7 +592,117 @@ def create_share_link(item_id):
 
         return {"ok": True, "share_url": share_url}
     except Exception as e:
-        print(f"共有リンク作成エラー: {e}")
+        print(f"[ERROR] 共有リンク作成エラー: {e}", flush=True)
+        app.logger.error(f"共有リンク作成エラー: {e}")
+        return {"error": str(e)}, 500
+
+
+# ============================================
+# カテゴリ管理（ページ + API）
+# ============================================
+
+@app.route("/categories")
+@login_required
+def categories_page():
+    """カテゴリ管理画面を表示"""
+    line_user_id = get_current_user_line_id()
+
+    # カテゴリ一覧を取得
+    categories = supabase_admin.table("categories") \
+        .select("id, name") \
+        .eq("line_user_id", line_user_id) \
+        .order("created_at") \
+        .execute()
+
+    # 各カテゴリのアイテム件数を取得
+    for cat in categories.data:
+        count_result = supabase_admin.table("items") \
+            .select("id", count="exact") \
+            .eq("category_id", cat["id"]) \
+            .is_("deleted_at", "null") \
+            .execute()
+        cat["item_count"] = count_result.count if hasattr(count_result, 'count') else 0
+
+    return render_template("categories.html", categories=categories.data)
+
+
+@app.route("/api/categories", methods=["POST"])
+@login_required
+def create_category():
+    """新しいカテゴリを作成する"""
+    line_user_id = get_current_user_line_id()
+    name = request.json.get("name", "").strip()
+
+    if not name:
+        return {"error": "カテゴリ名を入力してください"}, 400
+
+    try:
+        result = supabase_admin.table("categories").insert({
+            "line_user_id": line_user_id,
+            "name": name,
+        }).execute()
+        return {"ok": True, "category": result.data[0]}
+    except Exception as e:
+        if "duplicate" in str(e).lower():
+            return {"error": "同じ名前のカテゴリが既にあります"}, 400
+        return {"error": str(e)}, 500
+
+
+@app.route("/api/categories/<category_id>", methods=["PUT"])
+@login_required
+def update_category(category_id):
+    """カテゴリ名を変更する"""
+    line_user_id = get_current_user_line_id()
+    name = request.json.get("name", "").strip()
+
+    if not name:
+        return {"error": "カテゴリ名を入力してください"}, 400
+
+    try:
+        supabase_admin.table("categories") \
+            .update({"name": name}) \
+            .eq("id", category_id) \
+            .eq("line_user_id", line_user_id) \
+            .execute()
+        return {"ok": True}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route("/api/categories/<category_id>", methods=["DELETE"])
+@login_required
+def delete_category(category_id):
+    """カテゴリを削除する（アイテムは「未分類」に移動）"""
+    line_user_id = get_current_user_line_id()
+
+    try:
+        # 「未分類」カテゴリのIDを取得
+        uncategorized = supabase_admin.table("categories") \
+            .select("id") \
+            .eq("line_user_id", line_user_id) \
+            .eq("name", "未分類") \
+            .execute()
+
+        uncategorized_id = uncategorized.data[0]["id"] if uncategorized.data else None
+
+        # このカテゴリのアイテムを「未分類」に移動
+        if uncategorized_id:
+            supabase_admin.table("items") \
+                .update({"category_id": uncategorized_id}) \
+                .eq("category_id", category_id) \
+                .eq("line_user_id", line_user_id) \
+                .execute()
+
+        # カテゴリを削除
+        supabase_admin.table("categories") \
+            .delete() \
+            .eq("id", category_id) \
+            .eq("line_user_id", line_user_id) \
+            .execute()
+
+        return {"ok": True}
+    except Exception as e:
+        app.logger.error(f"カテゴリ削除エラー: {e}")
         return {"error": str(e)}, 500
 
 
@@ -584,7 +746,7 @@ def shared_item_page(token):
         return render_template("shared_item.html", item=item_data)
 
     except Exception as e:
-        print(f"共有リンクエラー: {e}")
+        app.logger.error(f"共有リンクエラー: {e}")
         return render_template("shared_item.html", item=None)
 
 

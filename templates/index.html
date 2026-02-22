@@ -1,20 +1,214 @@
-{# ========================================================== Re:find — index.html 一覧画面（メイン画面） ■ この画面の役割： - 保存したアイテムをタイルカードで一覧表示 - カテゴリタブでフィルタリング - カードをタップ → 編集モーダルが開く ■ Flask から渡されるデータ： - categories : カテゴリ一覧 [{ id, name }, ...] - items : アイテム一覧 [{ id, title, type, status, ... }, ...] - items_json : items の JSON文字列（JSで使う） ========================================================== #} {% extends "base.html" %} {% block title %}Re:find - ホーム{% endblock %} {% block extra_css %} {% endblock %} {% block content %}
-すべて {% for category in categories %} {{ category.name }} {% endfor %}
-{% if items | length == 0 %}
-📭
-まだアイテムがありません
+{# ==========================================================
+   Re:find — index.html 一覧画面（メイン画面）
 
-LINEで情報を送ってみましょう！
+   ■ この画面の役割：
+     - 保存したアイテムをタイルカードで一覧表示
+     - カテゴリタブでフィルタリング
+     - カードをタップ → 編集モーダルが開く
 
-{% else %} {% for item in items %}
-{% if item.type == 'image' and item.image_url %}  {% elif item.type == 'url' and item.ogp_image %}  {% else %}
-{% if item.type == 'image' %}📷 {% elif item.type == 'url' %}🔗 {% else %}📝 {% endif %}
-{% endif %}
-{{ item.title or '（タイトルなし）' }}
+   ■ Flask から渡されるデータ：
+     - categories : カテゴリ一覧 [{ id, name }, ...]
+     - items      : アイテム一覧 [{ id, title, type, status, ... }, ...]
+     - items_json : items の JSON文字列（JSで使う）
 
-{{ item.category_name or '未分類' }} {{ item.created_at | timeago }}
-{% if item.status == 'done' %}
-✓ 対応済み
-{% endif %}
-{% endfor %} {% endif %}
-{% endblock %} {% block extra_js %} {% endblock %}
+   ■ 読み込むCSS / JS：
+     - css/index.css  : カテゴリタブ、カードグリッド、空の状態
+     - css/modal.css  : 編集モーダルのスタイル
+     - js/index.js    : タブフィルタ、カードクリック → モーダル呼び出し
+     - js/modal.js    : モーダルの開閉・保存・削除・共有処理
+   ========================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Re:find - ホーム{% endblock %}
+
+{# ===== ページ固有のCSS =====
+     index.css  : カード一覧・カテゴリタブのスタイル
+     modal.css  : 編集モーダルのスタイル #}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}">
+{% endblock %}
+
+{% block content %}
+
+{# ----------------------------------------------------------
+   1. カテゴリフィルタタブ
+
+   「すべて」「教育」「習い事」... をピル型ボタンで横並びに表示。
+   タブが多い場合は横スクロールで対応（index.css で設定）。
+   クリック時のフィルタ処理は index.js が担当。
+
+   data-category="all"        → 「すべて」タブ（全アイテム表示）
+   data-category="{{ id }}"   → カテゴリIDでフィルタ
+   ---------------------------------------------------------- #}
+<div class="category-tabs-wrapper">
+    <div class="category-tabs">
+        <!-- 「すべて」は常に先頭。初期状態で active -->
+        <button class="category-tab active" data-category="all">すべて</button>
+        {% for category in categories %}
+        <button class="category-tab" data-category="{{ category.id }}">{{ category.name }}</button>
+        {% endfor %}
+    </div>
+</div>
+
+{# ----------------------------------------------------------
+   2. アイテム一覧（タイルカード）
+
+   CSS Grid で2列（スマホ）→ 3列（タブレット）→ 4列（PC）に並ぶ。
+   レイアウトは index.css の .item-grid で定義。
+
+   アイテムが0件の場合は「空の状態」メッセージを表示。
+   ---------------------------------------------------------- #}
+<div class="item-grid">
+
+    {% if items | length == 0 %}
+    {# ----- 空の状態（アイテム0件） -----
+         grid-column: 1 / -1 でグリッド全幅を使う #}
+    <div class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <div class="empty-state-text">まだアイテムがありません</div>
+        <div class="empty-state-hint">LINEで情報を送ってみましょう！</div>
+    </div>
+
+    {% else %}
+    {% for item in items %}
+    {# ----- 個別のカード -----
+         data-item-id       : index.js がクリック時にアイテムを特定するため
+         data-category-id   : index.js がタブフィルタで表示/非表示を切り替えるため
+         data-status="done" : index.css でカードを半透明にする #}
+    <div class="item-card"
+         data-item-id="{{ item.id }}"
+         data-category-id="{{ item.category_id }}"
+         data-status="{{ item.status }}">
+
+        {# --- サムネイル部分 ---
+             画像タイプ → 保存された画像を表示
+             URLタイプ  → OGP画像を表示
+             その他     → アイコン（📷🔗📝）をフォールバック表示 #}
+        <div class="item-card-thumb">
+            {% if item.type == 'image' and item.image_url %}
+            <img src="{{ item.image_url }}" alt="">
+            {% elif item.type == 'url' and item.ogp_image %}
+            <img src="{{ item.ogp_image }}" alt="">
+            {% else %}
+            <div class="item-card-icon">
+                {% if item.type == 'image' %}📷
+                {% elif item.type == 'url' %}🔗
+                {% else %}📝
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {# --- カード情報部分 ---
+             タイトル（2行で省略）、カテゴリバッジ、保存日 #}
+        <div class="item-card-body">
+            <div class="item-card-title">{{ item.title or '（タイトルなし）' }}</div>
+            <span class="item-card-category badge-category">{{ item.category_name or '未分類' }}</span>
+            <span class="item-card-date">{{ item.created_at | timeago }}</span>
+        </div>
+
+        {# --- 対応済みバッジ ---
+             status が "done" のとき、カード右上に表示（position: absolute） #}
+        {% if item.status == 'done' %}
+        <div class="item-card-done-badge">✓ 対応済み</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+</div>
+
+
+{# ----------------------------------------------------------
+   3. 編集モーダル
+
+   カードをクリックすると表示されるボトムシート型モーダル。
+   初期状態は display: none で非表示。
+   modal.js の openModal() で表示、closeModal() で非表示にする。
+
+   ■ 構成：
+     - オーバーレイ（暗い背景・クリックで閉じる）
+     - ヘッダー（対応済みボタン、✕閉じるボタン）
+     - 本体（サムネイル、タイトル入力、カテゴリ選択、メモ、URL、保存日、共有）
+     - フッター（削除ボタン、保存ボタン）
+
+   ■ 各要素のID → modal.js で getElementById して操作する
+   ---------------------------------------------------------- #}
+<div id="edit-modal" class="edit-modal-overlay" style="display: none;">
+    <div class="edit-modal-content">
+
+        {# --- ヘッダー ---
+             左：対応済み/未対応 切り替えボタン
+             右：✕ 閉じるボタン #}
+        <div class="edit-modal-header">
+            <button id="modal-done-btn" class="edit-modal-done-btn">✓ 対応済みにする</button>
+            <button id="modal-close-btn" class="edit-modal-close-btn">✕</button>
+        </div>
+
+        {# --- 本体 --- #}
+        <div class="edit-modal-body">
+            {# サムネイル表示エリア
+                 modal.js の openModal() が innerHTML で画像orアイコンを挿入する #}
+            <div id="modal-thumb" class="edit-modal-thumb"></div>
+
+            {# タイトル入力 #}
+            <label class="edit-modal-label">タイトル</label>
+            <input id="modal-title" type="text" class="edit-modal-input" placeholder="タイトルを入力">
+
+            {# カテゴリ選択（ドロップダウン）
+                 Flask から渡された categories をループして <option> を生成 #}
+            <label class="edit-modal-label">カテゴリ</label>
+            <select id="modal-category" class="edit-modal-select">
+                <option value="">未分類</option>
+                {% for category in categories %}
+                <option value="{{ category.id }}">{{ category.name }}</option>
+                {% endfor %}
+            </select>
+
+            {# メモ入力 #}
+            <label class="edit-modal-label">メモ</label>
+            <textarea id="modal-memo" class="edit-modal-textarea" rows="3" placeholder="メモを入力"></textarea>
+
+            {# 元のURL表示（URLタイプのみ）
+                 初期状態は非表示。modal.js が type=url のとき表示する #}
+            <div id="modal-url-section" style="display: none;">
+                <label class="edit-modal-label">元のURL</label>
+                <a id="modal-url" class="edit-modal-url" href="#" target="_blank" rel="noopener"></a>
+            </div>
+
+            {# 保存日（modal.js が textContent で日付を設定） #}
+            <div id="modal-date" class="edit-modal-date"></div>
+
+            {# 共有リンク作成ボタン
+                 クリック → modal.js が /api/items/:id/share を呼んでURLをコピー #}
+            <button id="modal-share-btn" class="edit-modal-share-btn">🔗 共有リンクを作成</button>
+        </div>
+
+        {# --- フッター ---
+             左：削除ボタン（flex: 1 で小さめ）
+             右：保存ボタン（flex: 2 で大きめ・コーラル色） #}
+        <div class="edit-modal-footer">
+            <button id="modal-delete-btn" class="edit-modal-delete-btn">削除</button>
+            <button id="modal-save-btn" class="edit-modal-save-btn">保存</button>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{# ===== ページ固有のJavaScript =====
+     1. ITEMS_DATA : Flask から渡されたアイテム一覧のJSON
+        → index.js と modal.js がカード・モーダルのデータ参照に使う
+     2. index.js   : カテゴリタブのフィルタ、カードクリック処理
+     3. modal.js   : モーダルの開閉、保存・削除・対応済み・共有処理
+     ※ 読み込み順序が重要：common.js → index.js → modal.js #}
+{% block extra_js %}
+<script>
+    const ITEMS_DATA = {{ items_json | safe }};
+</script>
+<script src="{{ url_for('static', filename='js/index.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modal.js') }}"></script>
+{% endblock %}
