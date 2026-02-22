@@ -1,6 +1,6 @@
 """
 notify.py — re-find 通知バッチ
-Render Cron Job で毎日 UTC 12:00（JST 21:00）に実行。
+GitHub Actions で毎日 UTC 12:00（JST 21:00）に実行。
 忘却曲線ベースの間隔で LINE Push Message を送信する。
 """
 
