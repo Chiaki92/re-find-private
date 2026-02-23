@@ -6,6 +6,7 @@ GitHub Actions で毎日 UTC 12:00（JST 21:00）に実行。
 
 import os
 import sys
+import uuid
 import logging
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
@@ -33,6 +34,7 @@ JST = timezone(timedelta(hours=9))
 # LINEアプリ内ブラウザだと Cookie が不安定でセッションが切れるため
 # ?openExternalBrowser=1 を付けて外部ブラウザで開かせる
 WEB_URL = "https://re-find.onrender.com/?openExternalBrowser=1"
+BASE_SHARE_URL = "https://re-find.onrender.com/share"
 
 # 忘却曲線に基づく通知間隔（notify_count → 次回通知までの日数）
 # count 0: 保存翌日  → count 1: 3日後 → count 2: 7日後
@@ -52,6 +54,28 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
 )
 log = logging.getLogger(__name__)
+
+
+# ── 共有リンクの取得・生成 ─────────────────────────
+def get_or_create_share_token(item_id, line_user_id):
+    """既存の共有トークンを取得、なければ新規作成して返す"""
+    res = (
+        supabase.table("shared_links")
+        .select("token")
+        .eq("item_id", item_id)
+        .limit(1)
+        .execute()
+    )
+    if res.data:
+        return res.data[0]["token"]
+
+    token = str(uuid.uuid4()).replace("-", "")[:16]
+    supabase.table("shared_links").insert({
+        "line_user_id": line_user_id,
+        "item_id": item_id,
+        "token": token,
+    }).execute()
+    return token
 
 
 # ── 通知対象アイテムの取得 ─────────────────────────
@@ -124,12 +148,15 @@ def build_message(items):
         lines.append(f"📬 {len(normal_items)}件の情報が待っています\n")
 
         for item in normal_items:
-            count    = item["notify_count"] + 1
-            category = item["category_name"]
-            title    = item.get("title") or "（タイトルなし）"
+            count     = item["notify_count"] + 1
+            category  = item["category_name"]
+            title     = item.get("title") or "（タイトルなし）"
+            share_url = item.get("share_url", "")
 
             lines.append(f"📁 {category}｜{count}回目")
             lines.append(title)
+            if share_url:
+                lines.append(share_url)
             lines.append("")
 
     # ── 最終通知ブロック ──
@@ -143,12 +170,15 @@ def build_message(items):
             lines.append("以下の情報への通知が今回で終わります。\n")
 
         for item in final_items:
-            category = item["category_name"]
-            title    = item.get("title") or "（タイトルなし）"
-            days_ago = calc_days_since(item["created_at"])
+            category  = item["category_name"]
+            title     = item.get("title") or "（タイトルなし）"
+            days_ago  = calc_days_since(item["created_at"])
+            share_url = item.get("share_url", "")
 
             lines.append(f"📁 {category}")
             lines.append(f"{title}（{days_ago}日前）")
+            if share_url:
+                lines.append(share_url)
             lines.append("")
 
         lines.append("まだ気になるものは「未対応」に戻せます。")
@@ -246,7 +276,16 @@ def main():
             log.info(f"通知OFF: {line_user_id}")
             continue
 
-        # 4. メッセージを組み立てて送信
+        # 4. 共有リンクを取得/生成してアイテムに付与
+        for item in user_items:
+            try:
+                token = get_or_create_share_token(item["id"], line_user_id)
+                item["share_url"] = f"{BASE_SHARE_URL}/{token}?openExternalBrowser=1"
+            except Exception as e:
+                log.warning(f"共有リンク生成失敗: item={item['id']} - {e}")
+                item["share_url"] = ""
+
+        # 5. メッセージを組み立てて送信
         message = build_message(user_items)
 
         if dry_run:
@@ -264,11 +303,11 @@ def main():
             fail_count += 1
             continue  # 送信失敗したユーザーのアイテムは更新しない
 
-        # 5. 送信成功 → notify_count と next_notify_at を更新
+        # 6. 送信成功 → notify_count と next_notify_at を更新
         for item in user_items:
             update_item(item)
 
-        # 6. 通知ログを記録
+        # 7. 通知ログを記録
         item_ids = [i["id"] for i in user_items]
         log_activity(
             line_user_id,
