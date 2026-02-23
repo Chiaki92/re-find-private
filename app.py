@@ -1,66 +1,26 @@
 # ============================================
-# Re:find - LINE Bot Webhook サーバー
+# Re:find - メインアプリケーション
 # ============================================
-# LINEに送ったメッセージをFlaskで受け取り、
-# AIで分類した結果を返信するコード
+# Flask 初期化、テンプレートフィルタ、エラーハンドラ、
+# Blueprint 登録、および少数のルート（index / health / share）を管理する。
 
-import os  # 環境変数を読み込むためのライブラリ
-import sys  # ロガーの stdout 出力用
-import re  # URL判定の正規表現に使用（B-4-2）
-import json  # items_json の生成に使用（C-1）
-import logging  # ロガー設定用
-import uuid
-import secrets  # CSRF対策用（B-5）
-from functools import wraps  # login_required デコレータ用（B-5）
-import requests as http_requests  # LINE Login API用（Flask の request と名前が被るので別名）
-from dotenv import load_dotenv  # .env を読むため
-from flask import Flask, request, abort, session, redirect, render_template  # Webサーバーの基本機能
+import os
+import sys
+import json
+import logging
+from datetime import datetime, timedelta, timezone
 
-from datetime import datetime, timedelta, timezone  # 日時用
-JST = timezone(timedelta(hours=9))  # 日本時間（C-1）
+from dotenv import load_dotenv
+from flask import Flask, request, session, redirect, render_template
 
-from supabase import create_client  # Supabase接続
+load_dotenv()
 
-# --- LINE Bot SDK の必要なパーツを読み込む ---
-from linebot.v3 import WebhookHandler  # LINEからの通知を処理する
-from linebot.v3.messaging import (
-    Configuration,          # LINE APIの設定情報を管理
-    ApiClient,              # LINE APIと通信するためのクライアント
-    MessagingApi,           # メッセージ送受信の機能
-    MessagingApiBlob,       # 画像などのバイナリ取得用（B-3）
-    ReplyMessageRequest,    # 返信メッセージのリクエスト
-    TextMessage,            # テキストメッセージ
-)
-from linebot.v3.webhooks import (
-    MessageEvent,           # 「メッセージが届いた」というイベント
-    TextMessageContent,     # テキストメッセージの中身
-    ImageMessageContent,    # 画像メッセージの中身（B-3）
-    # --- 非対応メッセージタイプ（B-4-3）---
-    StickerMessageContent,  # スタンプ
-    VideoMessageContent,    # 動画
-    AudioMessageContent,    # 音声
-    LocationMessageContent, # 位置情報
-    FileMessageContent,     # ファイル
-)
-from linebot.v3.exceptions import InvalidSignatureError  # 署名エラー用
+# --- タイムゾーン ---
+JST = timezone(timedelta(hours=9))
 
-from ai_classifier import classify_text, classify_image  # AI分類の共通関数
-from storage_handler import upload_image  # 画像アップロード（B-3）
-from ogp_fetcher import fetch_ogp  # OGP取得（B-4-2）
-from activity_logger import log_activity  # 行動ログ記録（B-4-5）
-
-# ============================================
-# .env 読み込み（ローカル開発用）
-# ============================================
-load_dotenv()  # これで .env を読み込む（ローカル時のみ）
-
-# ============================================
-# 開発モード設定（ローカル開発用）
-# ============================================
-# DEV_MODE=true を .env に設定すると LINE Login をスキップして
-# 自動的にセッションを設定する（本番では絶対に設定しないこと）
+# --- 開発モード設定 ---
 DEV_MODE = os.environ.get("DEV_MODE", "").lower() == "true"
-DEV_USER_ID = os.environ.get("DEV_USER_ID")       # .env に自分の LINE user ID を設定する
+DEV_USER_ID = os.environ.get("DEV_USER_ID")
 DEV_DISPLAY_NAME = os.environ.get("DEV_DISPLAY_NAME", "開発ユーザー")
 
 if DEV_MODE:
@@ -72,44 +32,31 @@ if DEV_MODE:
 app = Flask(__name__)
 
 # ============================================
-# ロガー設定（ターミナルにログ出力するため）
+# ロガー設定
 # ============================================
-# app.logger に直接ハンドラを追加する
-# sys.stdout に出力（stderr は Windows VSCode で表示されないことがある）
 _log_handler = logging.StreamHandler(sys.stdout)
 _log_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
 _log_handler.setLevel(logging.DEBUG)
 app.logger.addHandler(_log_handler)
 app.logger.setLevel(logging.DEBUG if DEV_MODE else logging.INFO)
-app.logger.propagate = False  # ルートロガーとの干渉を防止
-print(f"[DEBUG] ロガーハンドラ: {app.logger.handlers}", flush=True)
-print(f"[DEBUG] ロガーレベル: {app.logger.level}", flush=True)
+app.logger.propagate = False
 
 # ============================================
-# セッション設定（B-5：ログイン状態をブラウザに覚えさせる）
+# セッション設定
 # ============================================
-# secret_key: セッションデータを暗号化するための秘密鍵
-#   → 本番では FLASK_SECRET_KEY 環境変数に secrets.token_hex(32) で生成した値を設定する
-#   → "dev-secret-key" はローカル開発用のフォールバック
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
-# SameSite=Lax: 外部サイトからのリンク遷移時にCookieを送る（LINE認証コールバックで必要）
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-# セッションの有効期限: 30日間（秒単位で指定）
-# → この設定がないとブラウザを閉じるたびにログアウトされてしまう
 app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 30  # 30日間
 
 # ============================================
-# Jinja2 カスタムフィルタ（C-1：テンプレート用日時フォーマット）
+# Jinja2 カスタムフィルタ
 # ============================================
-# テンプレート内で {{ item.created_at | timeago }} のように使える
-# → 日時を人間が読みやすい形式に変換する
 
 @app.template_filter('timeago')
 def timeago_filter(value):
-    """日時を「3日前」のような相対表示に変換する Jinja2 フィルタ"""
+    """日時を「3日前」のような相対表示に変換する"""
     if not value:
         return ""
-    # 文字列なら datetime に変換（Supabaseから取得した値はISO形式の文字列）
     if isinstance(value, str):
         value = datetime.fromisoformat(value.replace("Z", "+00:00"))
     now = datetime.now(timezone.utc)
@@ -118,7 +65,6 @@ def timeago_filter(value):
     hours = int(diff.total_seconds() / 3600)
     days = diff.days
 
-    # 経過時間に応じて適切な単位で表示
     if minutes < 1:
         return "たった今"
     elif minutes < 60:
@@ -135,95 +81,18 @@ def timeago_filter(value):
 
 @app.template_filter('dateformat')
 def dateformat_filter(value):
-    """日時を「2026/02/20」形式（JST）に変換する Jinja2 フィルタ"""
+    """日時を「2026/02/20」形式（JST）に変換する"""
     if not value:
         return ""
     if isinstance(value, str):
         value = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    # UTC → JST に変換してフォーマット
     jst_time = value.astimezone(JST)
     return jst_time.strftime("%Y/%m/%d")
 
 
 # ============================================
-# Supabase 管理用クライアント（service_role 用）
+# 開発モード: 自動ログイン
 # ============================================
-
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が設定されていません")
-
-supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
-# ============================================
-# LINE Login の設定（B-5：Messaging API とは別のチャネル）
-# ============================================
-# ⚠️ LINE Login チャネルは Messaging API チャネルとは別物
-#   → LINE Developers で「LINE Login」タイプのチャネルを新規作成して取得する
-LINE_LOGIN_CHANNEL_ID = os.environ.get("LINE_LOGIN_CHANNEL_ID")        # LINE Login の Channel ID
-LINE_LOGIN_CHANNEL_SECRET = os.environ.get("LINE_LOGIN_CHANNEL_SECRET")  # LINE Login の Channel Secret
-# LIFF ID: LINE DevelopersのLIFFタブで作成したアプリのID
-LIFF_ID = os.environ.get("LIFF_ID")
-# コールバックURL: LINEで認証した後、ユーザーが戻ってくる先
-#   → LINE Developers の「コールバックURL」にも同じURLを設定する必要がある
-LINE_LOGIN_REDIRECT_URI = os.environ.get(
-    "LINE_LOGIN_REDIRECT_URI",
-    "https://re-find.onrender.com/login/callback"  # デフォルト値（Render のURL）
-)
-
-# ============================================
-# LINE Bot の設定
-# ============================================
-channel_access_token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
-channel_secret = os.environ.get("LINE_CHANNEL_SECRET")
-
-if not channel_access_token or not channel_secret:
-    raise RuntimeError(
-        "LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN が設定されていません"
-    )
-
-configuration = Configuration(access_token=channel_access_token)
-handler = WebhookHandler(channel_secret)
-
-# ============================================
-# ヘルパー関数（B-5：認証まわり）
-# ============================================
-
-def get_current_user_line_id():
-    """
-    現在ログイン中のユーザーの line_user_id を返す。未ログインなら None。
-    使い方: line_user_id = get_current_user_line_id()
-    """
-    return session.get("line_user_id")
-
-
-def login_required(f):
-    """
-    ログインしていないユーザーをログイン画面にリダイレクトするデコレータ。
-    使い方:
-        @app.route("/protected")
-        @login_required
-        def protected_page():
-            ...
-    """
-    @wraps(f)  # 元の関数名やdocstringを保持する
-    def decorated_function(*args, **kwargs):
-        print(f"[DEBUG] login_required: {f.__name__}, session={dict(session)}", flush=True)
-        if not session.get("line_user_id"):
-            print(f"[DEBUG] 未ログイン → /login にリダイレクト", flush=True)
-            return redirect("/login")  # 未ログイン → ログイン画面へ
-        return f(*args, **kwargs)  # ログイン済み → 元の関数を実行
-    return decorated_function
-
-
-# ============================================
-# 開発モード: 自動ログイン（before_request）
-# ============================================
-# DEV_MODE 時、全リクエストの前にセッションを自動設定する。
-# → login_required をパスできるので LINE Login なしで画面を確認できる。
-# ⚠️ if DEV_MODE: で囲んでいるので、本番ではフック自体が登録されない。
 if DEV_MODE:
     @app.before_request
     def dev_auto_login():
@@ -234,16 +103,26 @@ if DEV_MODE:
             session["display_name"] = DEV_DISPLAY_NAME
             app.logger.info(f"[DEV_MODE] 自動ログイン: {DEV_DISPLAY_NAME} ({DEV_USER_ID})")
 
+# ============================================
+# Blueprint 登録
+# ============================================
+from blueprints.auth import auth_bp
+from blueprints.api_items import api_items_bp
+from blueprints.api_categories import api_categories_bp
+from blueprints.webhook import webhook_bp
+
+app.register_blueprint(auth_bp)
+app.register_blueprint(api_items_bp)
+app.register_blueprint(api_categories_bp)
+app.register_blueprint(webhook_bp)
 
 # ============================================
-# ルート（URL）の設定
+# ルート（app.py に残すもの）
 # ============================================
+from extensions import supabase_admin
+from auth_utils import login_required, get_current_user_line_id
 
-# ========================================
-# ヘルスチェック用エンドポイント
-# UptimeRobotなどの死活監視サービスが定期的にアクセスしてくる
-# これによりRenderのスリープを防止する
-# ========================================
+
 @app.route("/health")
 def health_check():
     """UptimeRobot等の監視サービス用。認証不要・軽量。"""
@@ -256,15 +135,12 @@ def index():
     """一覧画面：ログインユーザーのアイテムをタイル表示"""
     line_user_id = get_current_user_line_id()
 
-    # --- カテゴリ一覧を取得 ---
     categories = supabase_admin.table("categories") \
         .select("id, name") \
         .eq("line_user_id", line_user_id) \
         .order("created_at") \
         .execute()
 
-    # --- アイテム一覧を取得 ---
-    # ⚠️ deleted_at IS NULL を忘れると削除済みも表示される
     items = supabase_admin.table("items") \
         .select("*, categories(name)") \
         .eq("line_user_id", line_user_id) \
@@ -272,474 +148,33 @@ def index():
         .order("created_at", desc=True) \
         .execute()
 
-    # --- カテゴリ名をアイテムに追加 ---
-    # Supabase のリレーション結果を整形する
     items_list = []
     for item in items.data:
-        # categories(name) の結果を取り出す
         cat = item.pop("categories", None)
         item["category_name"] = cat["name"] if cat else "未分類"
         items_list.append(item)
 
-    # --- テンプレートにデータを渡す ---
     return render_template("index.html",
-        categories=categories.data,    # カテゴリタブ用
-        items=items_list,              # カード表示用
-        items_json=json.dumps(items_list, default=str),  # JS用（モーダル）
+        categories=categories.data,
+        items=items_list,
+        items_json=json.dumps(items_list, default=str),
     )
 
-# ============================================
-# ログイン・ログアウト（B-5）
-# ============================================
-
-@app.route("/login")
-def login_page():
-    """ログイン画面を表示する"""
-    # すでにログイン済みならトップページへ飛ばす（二重ログイン防止）
-    if session.get("line_user_id"):
-        return redirect("/")
-    return render_template("login.html")
-
-
-@app.route("/login/line")
-def login_line():
-    """
-    「LINEでログイン」ボタンを押したときの処理。
-    LINEの認証ページ（authorize URL）にリダイレクトする。
-    """
-    # CSRF対策: ランダムな文字列を生成してセッションに保存
-    # → コールバック時に同じ値が返ってくるか検証する（なりすまし防止）
-    state = secrets.token_urlsafe(32)
-    session["oauth_state"] = state
-
-    # LINE の認証ページURL を組み立てる
-    # response_type=code → 認証コードフローを使用
-    # scope=profile openid → プロフィール情報とIDを要求
-    auth_url = (
-        "https://access.line.me/oauth2/v2.1/authorize"
-        f"?response_type=code"
-        f"&client_id={LINE_LOGIN_CHANNEL_ID}"
-        f"&redirect_uri={LINE_LOGIN_REDIRECT_URI}"
-        f"&state={state}"
-        f"&scope=profile%20openid"
-    )
-    # LINEの認証ページへ飛ばす
-    return redirect(auth_url)
-
-
-@app.route("/login/callback")
-def login_callback():
-    """
-    LINEで認証した後、戻ってくる先（コールバック）。
-    ⚠️ /callback（LINE Bot Webhook）とは別のルート。衝突しない。
-
-    処理の流れ:
-      ④ LINEからcodeを受け取る
-      ⑤ codeをアクセストークンに交換する
-      ⑥ アクセストークンでプロフィールを取得する
-      ⑦ DBに保存（UPSERT） + デフォルトデータ作成
-      ⑧ セッションに保存してトップページへリダイレクト
-    """
-
-    # --- エラーチェック ---
-
-    # LINE側でエラーが発生した場合（ユーザーがキャンセルした等）
-    error = request.args.get("error")
-    if error:
-        app.logger.error(f"LINE認証エラー: {error}")
-        return redirect("/login")
-
-    # CSRF対策チェック（送ったstateと返ってきたstateが一致するか）
-    state = request.args.get("state")
-    if state != session.get("oauth_state"):
-        app.logger.error("stateが一致しません（CSRF攻撃の可能性）")
-        return redirect("/login")
-
-    # ④ LINEから認証コードを取得
-    code = request.args.get("code")
-    if not code:
-        app.logger.error("認証コードがありません")
-        return redirect("/login")
-
-    # --- ⑤ 認証コードをアクセストークンに交換する ---
-    # LINE の token API に POST リクエストを送る
-    token_response = http_requests.post(
-        "https://api.line.me/oauth2/v2.1/token",
-        data={
-            "grant_type": "authorization_code",  # 認証コードフロー
-            "code": code,                          # LINEからもらった認証コード
-            "redirect_uri": LINE_LOGIN_REDIRECT_URI,  # コールバックURL（一致必須）
-            "client_id": LINE_LOGIN_CHANNEL_ID,        # LINE Login の Channel ID
-            "client_secret": LINE_LOGIN_CHANNEL_SECRET,  # LINE Login の Channel Secret
-        },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
-
-    if token_response.status_code != 200:
-        app.logger.error(f"トークン取得失敗: {token_response.text}")
-        return redirect("/login")
-
-    # レスポンスからアクセストークンを取り出す
-    access_token = token_response.json().get("access_token")
-
-    # --- ⑥ アクセストークンでユーザーのプロフィールを取得する ---
-    # LINE の profile API に GET リクエストを送る
-    profile_response = http_requests.get(
-        "https://api.line.me/v2/profile",
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
-
-    if profile_response.status_code != 200:
-        app.logger.error(f"プロフィール取得失敗: {profile_response.text}")
-        return redirect("/login")
-
-    profile = profile_response.json()
-    line_user_id = profile.get("userId")       # 例："U1234abcdef..."
-    display_name = profile.get("displayName")  # 例："ちあき"
-
-    app.logger.info(f"ログイン成功: {display_name} ({line_user_id})")
-
-    # --- ⑦ DBに保存（UPSERT：あれば更新、なければ作成） ---
-    try:
-        # users テーブルに line_user_id と display_name を保存
-        # on_conflict="line_user_id" → 同じユーザーが再ログインしたら display_name を更新
-        supabase_admin.table("users").upsert({
-            "line_user_id": line_user_id,
-            "display_name": display_name,
-        }, on_conflict="line_user_id").execute()
-
-        # 初回ログイン時のみ: デフォルトのカテゴリ・設定・通知ルールを作成
-        _create_default_data_if_needed(line_user_id)
-
-    except Exception as e:
-        app.logger.error(f"DB保存エラー: {e}")
-        # DB保存に失敗してもログインは続行する（ユーザー体験を優先）
-
-    # --- ⑧ セッションにログイン情報を保存 ---
-    session.permanent = True  # 30日間有効にする（PERMANENT_SESSION_LIFETIME で設定した期間）
-    session["line_user_id"] = line_user_id    # 他のルートでユーザー判別に使う
-    session["display_name"] = display_name    # 画面表示用
-
-    # トップページへリダイレクト
-    return redirect("/")
-
-
-@app.route("/logout")
-def logout():
-    """セッションを全てクリアしてログイン画面に戻す"""
-    session.clear()  # line_user_id, display_name, oauth_state などを全削除
-    return redirect("/login")
-
-
-# ============================================
-# LIFF（LINEアプリ内シームレスログイン）
-# ============================================
-
-@app.route("/liff")
-def liff_entry():
-    """
-    LINEアプリ内から開いた場合のエントリポイント。
-    LIFF SDKを使ってLINEのプロフィール情報を自動取得し、
-    セッションを発行してから一覧画面へリダイレクトする。
-    外部ブラウザからアクセスした場合は通常のログインフローにフォールバック。
-    """
-    if not LIFF_ID:
-        app.logger.error("LIFF_ID が設定されていません")
-        return redirect("/login")
-    return render_template("liff.html", liff_id=LIFF_ID)
-
-
-@app.route("/api/liff-login", methods=["POST"])
-def liff_login():
-    """LIFFから受け取ったユーザー情報でセッションを発行"""
-    data = request.json
-    line_user_id = data.get("userId")
-    display_name = data.get("displayName")
-
-    if not line_user_id:
-        return {"error": "userId is required"}, 400
-
-    # DB保存（通常ログインと同じ処理）
-    try:
-        supabase_admin.table("users").upsert({
-            "line_user_id": line_user_id,
-            "display_name": display_name,
-        }, on_conflict="line_user_id").execute()
-
-        _create_default_data_if_needed(line_user_id)
-    except Exception as e:
-        app.logger.error(f"LIFF DB保存エラー: {e}")
-
-    # セッション発行（通常のログインと同じ状態にする）
-    session.permanent = True
-    session["line_user_id"] = line_user_id
-    session["display_name"] = display_name
-
-    return {"ok": True}
-
-
-def _create_default_data_if_needed(line_user_id):
-    """
-    初回ログイン時にデフォルトのカテゴリ・設定・通知ルールを作成する。
-    すでにデータがある場合（2回目以降のログイン）は何もしない。
-    """
-
-    # --- 「未分類」カテゴリがなければ作成 ---
-    # LINE Bot でメッセージを送ったとき、カテゴリが判定できなかった場合に使われる
-    existing = supabase_admin.table("categories") \
-        .select("id") \
-        .eq("line_user_id", line_user_id) \
-        .eq("name", "未分類") \
-        .execute()
-
-    if not existing.data:
-        supabase_admin.table("categories").insert({
-            "line_user_id": line_user_id,
-            "name": "未分類",
-        }).execute()
-
-    # --- user_settings がなければデフォルト作成 ---
-    # 通知時間のデフォルト: 21:00（夜9時）
-    existing_settings = supabase_admin.table("user_settings") \
-        .select("id") \
-        .eq("line_user_id", line_user_id) \
-        .execute()
-
-    if not existing_settings.data:
-        supabase_admin.table("user_settings").insert({
-            "line_user_id": line_user_id,
-            "notify_time": "21:00",      # デフォルトの通知時刻
-            "notify_enabled": True,       # 通知ON
-        }).execute()
-
-    # --- notification_rules がなければデフォルト作成 ---
-    # 忘却曲線ベースの通知間隔: 1日後、3日後、7日後、14日後、30日後、60日後
-    existing_rules = supabase_admin.table("notification_rules") \
-        .select("id") \
-        .eq("line_user_id", line_user_id) \
-        .execute()
-
-    if not existing_rules.data:
-        supabase_admin.table("notification_rules").insert({
-            "line_user_id": line_user_id,
-            "category_id": None,      # 全カテゴリ共通のルール
-            "item_id": None,          # 全アイテム共通のルール
-            "rule_type": "interval",  # 間隔ベースの通知
-            "config": {"days": [1, 3, 7, 14, 30, 60]},  # 忘却曲線に基づく日数
-            "is_active": True,        # ルール有効
-            "priority": 10,           # 優先度（数値が大きいほど優先）
-        }).execute()
-
-
-# ============================================
-# アイテム API（更新・削除・共有）
-# ============================================
-
-@app.route("/api/items/<item_id>", methods=["PUT"])
-@login_required
-def update_item(item_id):
-    """アイテムを更新する（カテゴリ変更、メモ追加、対応済みなど）"""
-    line_user_id = get_current_user_line_id()
-    data = request.json
-
-    # 更新できるフィールドだけ抽出（不正なフィールドを弾く）
-    allowed_fields = {"title", "category_id", "memo", "status"}
-    update_data = {k: v for k, v in data.items() if k in allowed_fields}
-
-    if not update_data:
-        return {"error": "更新するデータがありません"}, 400
-
-    try:
-        supabase_admin.table("items") \
-            .update(update_data) \
-            .eq("id", item_id) \
-            .eq("line_user_id", line_user_id) \
-            .execute()
-        return {"ok": True}
-    except Exception as e:
-        app.logger.error(f"アイテム更新エラー: {e}")
-        return {"error": str(e)}, 500
-
-
-@app.route("/api/items/<item_id>", methods=["DELETE"])
-@login_required
-def delete_item(item_id):
-    """アイテムを削除する（ソフトデリート：deleted_at に日時を入れる）"""
-    line_user_id = get_current_user_line_id()
-
-    try:
-        supabase_admin.table("items") \
-            .update({"deleted_at": datetime.now(JST).isoformat()}) \
-            .eq("id", item_id) \
-            .eq("line_user_id", line_user_id) \
-            .execute()
-        return {"ok": True}
-    except Exception as e:
-        app.logger.error(f"アイテム削除エラー: {e}")
-        return {"error": str(e)}, 500
-
-
-@app.route("/api/items/<item_id>/share", methods=["POST"])
-@login_required
-def create_share_link(item_id):
-    """共有リンクを作成する"""
-    line_user_id = get_current_user_line_id()
-
-    # ランダムなトークンを生成
-    token = str(uuid.uuid4()).replace("-", "")[:16]
-
-    try:
-        print(f"[DEBUG] 共有リンク作成開始: item_id={item_id}, user={line_user_id}", flush=True)
-        supabase_admin.table("shared_links").insert({
-            "line_user_id": line_user_id,
-            "item_id": item_id,
-            "token": token,
-        }).execute()
-        print(f"[DEBUG] 共有リンク作成成功: token={token}", flush=True)
-
-        # 共有URLを返す
-        base_url = request.host_url.rstrip("/")
-        share_url = f"{base_url}/share/{token}"
-
-        return {"ok": True, "share_url": share_url}
-    except Exception as e:
-        print(f"[ERROR] 共有リンク作成エラー: {e}", flush=True)
-        app.logger.error(f"共有リンク作成エラー: {e}")
-        return {"error": str(e)}, 500
-
-
-# ============================================
-# カテゴリ管理（ページ + API）
-# ============================================
-
-@app.route("/categories")
-@login_required
-def categories_page():
-    """カテゴリ管理画面を表示"""
-    line_user_id = get_current_user_line_id()
-
-    # カテゴリ一覧を取得
-    categories = supabase_admin.table("categories") \
-        .select("id, name") \
-        .eq("line_user_id", line_user_id) \
-        .order("created_at") \
-        .execute()
-
-    # 各カテゴリのアイテム件数を取得
-    for cat in categories.data:
-        count_result = supabase_admin.table("items") \
-            .select("id", count="exact") \
-            .eq("category_id", cat["id"]) \
-            .is_("deleted_at", "null") \
-            .execute()
-        cat["item_count"] = count_result.count if hasattr(count_result, 'count') else 0
-
-    return render_template("categories.html", categories=categories.data)
-
-
-@app.route("/api/categories", methods=["POST"])
-@login_required
-def create_category():
-    """新しいカテゴリを作成する"""
-    line_user_id = get_current_user_line_id()
-    name = request.json.get("name", "").strip()
-
-    if not name:
-        return {"error": "カテゴリ名を入力してください"}, 400
-
-    try:
-        result = supabase_admin.table("categories").insert({
-            "line_user_id": line_user_id,
-            "name": name,
-        }).execute()
-        return {"ok": True, "category": result.data[0]}
-    except Exception as e:
-        if "duplicate" in str(e).lower():
-            return {"error": "同じ名前のカテゴリが既にあります"}, 400
-        return {"error": str(e)}, 500
-
-
-@app.route("/api/categories/<category_id>", methods=["PUT"])
-@login_required
-def update_category(category_id):
-    """カテゴリ名を変更する"""
-    line_user_id = get_current_user_line_id()
-    name = request.json.get("name", "").strip()
-
-    if not name:
-        return {"error": "カテゴリ名を入力してください"}, 400
-
-    try:
-        supabase_admin.table("categories") \
-            .update({"name": name}) \
-            .eq("id", category_id) \
-            .eq("line_user_id", line_user_id) \
-            .execute()
-        return {"ok": True}
-    except Exception as e:
-        return {"error": str(e)}, 500
-
-
-@app.route("/api/categories/<category_id>", methods=["DELETE"])
-@login_required
-def delete_category(category_id):
-    """カテゴリを削除する（アイテムは「未分類」に移動）"""
-    line_user_id = get_current_user_line_id()
-
-    try:
-        # 「未分類」カテゴリのIDを取得
-        uncategorized = supabase_admin.table("categories") \
-            .select("id") \
-            .eq("line_user_id", line_user_id) \
-            .eq("name", "未分類") \
-            .execute()
-
-        uncategorized_id = uncategorized.data[0]["id"] if uncategorized.data else None
-
-        # このカテゴリのアイテムを「未分類」に移動
-        if uncategorized_id:
-            supabase_admin.table("items") \
-                .update({"category_id": uncategorized_id}) \
-                .eq("category_id", category_id) \
-                .eq("line_user_id", line_user_id) \
-                .execute()
-
-        # カテゴリを削除
-        supabase_admin.table("categories") \
-            .delete() \
-            .eq("id", category_id) \
-            .eq("line_user_id", line_user_id) \
-            .execute()
-
-        return {"ok": True}
-    except Exception as e:
-        app.logger.error(f"カテゴリ削除エラー: {e}")
-        return {"error": str(e)}, 500
-
-
-# ============================================
-# 共有リンク閲覧ページ（C-4：ログイン不要）
-# ============================================
 
 @app.route("/share/<token>")
 def shared_item_page(token):
     """共有リンク閲覧ページ（ログイン不要）"""
-
-    # service_role_key でRLSバイパスしてデータ取得
     try:
-        # トークンから共有リンク情報を取得
         link = supabase_admin.table("shared_links") \
             .select("item_id") \
             .eq("token", token) \
             .execute()
 
         if not link.data:
-            # トークンが見つからない → 無効なリンク
             return render_template("shared_item.html", item=None)
 
         item_id = link.data[0]["item_id"]
 
-        # アイテム情報を取得
         item = supabase_admin.table("items") \
             .select("*, categories(name)") \
             .eq("id", item_id) \
@@ -749,7 +184,6 @@ def shared_item_page(token):
         if not item.data:
             return render_template("shared_item.html", item=None)
 
-        # カテゴリ名を整形
         item_data = item.data[0]
         cat = item_data.pop("categories", None)
         item_data["category_name"] = cat["name"] if cat else "未分類"
@@ -762,341 +196,27 @@ def shared_item_page(token):
 
 
 # ============================================
-# LINE Bot Webhook（Messaging API）
+# グローバルエラーハンドラ
 # ============================================
 
-@app.route("/callback", methods=["POST"])
-def callback():
-    """
-    LINEからのWebhook（通知）を受け取る入口
-    """
-    # ① リクエストヘッダーから署名を取得
-    signature = request.headers.get("X-Line-Signature", "")
-
-    # ② リクエストの本文（メッセージデータ）を取得
-    body = request.get_data(as_text=True)
-    print("受信:", body)  # ログに表示（デバッグ用）
-    app.logger.info(f"[callback] body: {body}")
-
-    # ③ 署名を検証して、メッセージを処理する
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        app.logger.error("署名エラー: 不正なリクエスト")
-        abort(400)
-    except Exception as e:
-        app.logger.error(f"その他エラー: {e}")
-        abort(500)
-
-    return "OK"
+@app.errorhandler(400)
+def bad_request(e):
+    return {"error": "Bad request", "code": "BAD_REQUEST"}, 400
 
 
-# ============================================
-# URL判定ユーティリティ（B-4-2）
-# ============================================
-
-def is_url(text):
-    """
-    テキストにURLが含まれているか判定し、最初のURLを返す。
-    URLが見つからなければ None を返す。
-
-    例:
-        is_url("https://example.com の記事")  → "https://example.com"
-        is_url("今日は天気がいい")              → None
-    """
-    url_pattern = r'https?://[^\s]+'
-    match = re.search(url_pattern, text)
-    return match.group() if match else None
+@app.errorhandler(404)
+def not_found(e):
+    return {"error": "Not found", "code": "NOT_FOUND"}, 404
 
 
-# ============================================
-# メッセージ受信時の処理（ここでAI分類）
-# ============================================
-
-@handler.add(MessageEvent, message=TextMessageContent)
-def handle_text_message(event):
-    user_id = event.source.user_id
-    text = event.message.text
-    app.logger.info(f"[テキスト受信] user={user_id}, text={text}")
-
-    # デフォルトの返信（エラー時にユーザーへ返すメッセージ）（B-4-4）
-    reply_text = "⚠️ 保存中にエラーが発生しました。\nもう一度お試しください。"
-
-    # --- URL判定（B-4-2）---
-    # テキストにURLが含まれていれば URL処理、なければ従来のテキスト処理
-    url = is_url(text)
-
-    # --- AI & DB 部分 ---
-    try:
-        # ① ユーザーの既存カテゴリ一覧を取得
-        cats = supabase_admin.table("categories") \
-            .select("*") \
-            .eq("line_user_id", user_id) \
-            .execute()
-
-        if getattr(cats, "error", None):
-            app.logger.error(f"[supabase] categories error: {cats.error}")
-            existing = {}
-        else:
-            existing = {c["name"]: c["id"] for c in (cats.data or [])}
-
-        category_names = list(existing.keys())
-
-        # ===== URL処理（B-4-2）=====
-        if url:
-            app.logger.info(f"[URL検出] url={url}")
-
-            # ② OGP情報を取得（タイトル・説明・サムネイル）
-            ogp = fetch_ogp(url)
-            app.logger.info(f"[OGP取得結果] title={ogp['title']}, image={ogp['image']}")
-
-            # ③ OGPのタイトル＋説明文を結合してAI分類に渡す
-            ai_input = f"{ogp['title']}。{ogp['description']}"
-            result = classify_text(ai_input, category_names)
-            title = result.get("title", ogp["title"][:30])
-            category_name = result.get("category", "未分類")
-
-            app.logger.info(f"[AI分類結果(URL)] title={title}, category={category_name}")
-
-        # ===== テキスト処理（従来のロジック）=====
-        else:
-            # ② AI分類（テキストをそのまま渡す）
-            result = classify_text(text, category_names)
-            title = result.get("title", text[:30])
-            category_name = result.get("category", "未分類")
-
-            app.logger.info(f"[AI分類結果] title={title}, category={category_name}")
-
-        # ③ カテゴリなければ作成（URL・テキスト共通）
-        if category_name in existing:
-            category_id = existing[category_name]
-        else:
-            new_cat = supabase_admin.table("categories") \
-                .insert({"line_user_id": user_id, "name": category_name}) \
-                .execute()
-
-            if getattr(new_cat, "error", None):
-                app.logger.error(f"[supabase] insert category error: {new_cat.error}")
-                category_id = None
-            else:
-                category_id = new_cat.data[0]["id"]
-                app.logger.info(f"[カテゴリ作成] {category_name} (id={category_id})")
-
-        # ④ items に保存（明日21時に通知）
-        tomorrow_9pm = (datetime.now(JST) + timedelta(days=1)).replace(
-            hour=21, minute=0, second=0, microsecond=0
-        )
-
-        # URL と テキストで保存するデータを分ける
-        if url:
-            # URL用：original_url, description(OGP説明文), ogp_image を保存
-            item_data = {
-                "line_user_id": user_id,
-                "type": "url",
-                "original_url": url,
-                "title": title,
-                "description": ogp["description"],
-                "ogp_image": ogp["image"],
-                "status": "pending",
-                "next_notify_at": tomorrow_9pm.isoformat(),
-            }
-        else:
-            # テキスト用：従来通り
-            item_data = {
-                "line_user_id": user_id,
-                "type": "text",
-                "title": title,
-                "description": text,
-                "status": "pending",
-                "next_notify_at": tomorrow_9pm.isoformat(),
-            }
-
-        if category_id:
-            item_data["category_id"] = category_id
-
-        insert_res = supabase_admin.table("items").insert(item_data).execute()
-        if getattr(insert_res, "error", None):
-            app.logger.error(f"[supabase] insert item error: {insert_res.error}")
-
-        # ここまで全部成功したときだけ、AI結果ベースの返信文に上書き
-        if url:
-            reply_text = f"🔗 「{category_name}」に保存しました！\nタイトル: {title}"
-        else:
-            reply_text = f"📝 「{category_name}」に保存しました！\nタイトル: {title}"
-
-        # 行動ログを記録（B-4-5）
-        msg_type = "url" if url else "text"
-        log_activity(user_id, "bot_message", metadata={"message_type": msg_type})
-
-    except Exception as e:
-        # AI or Supabase で失敗したとき
-        app.logger.error(f"[handler] unexpected error (AI/DB): {e}")
-
-    # --- LINEへの返信 ---
-    try:
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_text)],
-                )
-            )
-
-        app.logger.info("[handler] reply_message sent")
-
-    except Exception as e:
-        app.logger.error(f"[handler] unexpected error (reply): {e}")
-
-
-# ============================================
-# 画像受信時の処理（B-3 で追加）
-# ============================================
-
-@handler.add(MessageEvent, message=ImageMessageContent)
-def handle_image_message(event):
-    user_id = event.source.user_id
-    message_id = event.message.id
-    app.logger.info(f"[画像受信] user={user_id}, message_id={message_id}")
-
-    # デフォルトの返信（エラー時にユーザーへ返すメッセージ）（B-4-4）
-    reply_text = "⚠️ 保存中にエラーが発生しました。\nもう一度お試しください。"
-
-    # --- 画像取得 → Storage → AI解析 → DB保存 ---
-    try:
-        # ① LINEから画像データをダウンロード（v3 SDK の MessagingApiBlob を使用）
-        try:
-            with ApiClient(configuration) as api_client:
-                blob_api = MessagingApiBlob(api_client)
-                image_bytes = blob_api.get_message_content(message_id)
-        except Exception as e:
-            # 画像ダウンロード失敗は専用メッセージで返す（B-4-4）
-            app.logger.error(f"[handler] 画像ダウンロード失敗: {e}")
-            reply_text = "⚠️ 画像を取得できませんでした。\nもう一度送信してみてください。"
-            raise  # 外側の except に伝搬して処理を中断する
-
-        # ② UUID発行（DB用）
-        item_id = str(uuid.uuid4())
-
-        # ③ Supabase Storageへ保存
-        image_url = upload_image(user_id, item_id, image_bytes)
-
-        # ④ 既存カテゴリ取得
-        cats = supabase_admin.table("categories") \
-            .select("*") \
-            .eq("line_user_id", user_id) \
-            .execute()
-
-        if getattr(cats, "error", None):
-            app.logger.error(f"[supabase] categories error: {cats.error}")
-            existing = {}
-        else:
-            existing = {c["name"]: c["id"] for c in (cats.data or [])}
-
-        # ⑤ AI解析（画像からタイトル・カテゴリを生成）
-        ai_result = classify_image(image_bytes, list(existing.keys()))
-        title = ai_result.get("title", "画像メモ")
-        category_name = ai_result.get("category", "未分類")
-
-        app.logger.info(f"[AI画像分類結果] title={title}, category={category_name}")
-
-        # ⑥ カテゴリなければ作成
-        if category_name in existing:
-            category_id = existing[category_name]
-        else:
-            new_cat = supabase_admin.table("categories") \
-                .insert({"line_user_id": user_id, "name": category_name}) \
-                .execute()
-
-            if getattr(new_cat, "error", None):
-                app.logger.error(f"[supabase] insert category error: {new_cat.error}")
-                category_id = None
-            else:
-                category_id = new_cat.data[0]["id"]
-                app.logger.info(f"[カテゴリ作成] {category_name} (id={category_id})")
-
-        # ⑦ items に保存（明日21時に通知）
-        tomorrow_9pm = (datetime.now(JST) + timedelta(days=1)).replace(
-            hour=21, minute=0, second=0, microsecond=0
-        )
-
-        item_data = {
-            "id": item_id,
-            "line_user_id": user_id,
-            "type": "image",
-            "title": title,
-            "image_url": image_url,
-            "status": "pending",
-            "next_notify_at": tomorrow_9pm.isoformat(),
-        }
-        if category_id:
-            item_data["category_id"] = category_id
-
-        insert_res = supabase_admin.table("items").insert(item_data).execute()
-        if getattr(insert_res, "error", None):
-            app.logger.error(f"[supabase] insert item error: {insert_res.error}")
-
-        # ここまで全部成功したときだけ、AI結果ベースの返信文に上書き
-        reply_text = f"📷 「{category_name}」に保存しました！\nタイトル: {title}"
-
-        # 行動ログを記録（B-4-5）
-        log_activity(user_id, "bot_message", metadata={"message_type": "image"})
-
-    except Exception as e:
-        # 画像処理で失敗したとき（B-4-4）
-        # 画像ダウンロード失敗の場合は既に専用メッセージがセットされているので
-        # それ以外のエラー（Storage・AI・DB等）の場合のみ上書きする
-        app.logger.error(f"[handler] unexpected error (画像処理): {e}")
-        if "画像を取得できませんでした" not in reply_text:
-            reply_text = "⚠️ 保存に失敗しました。\nもう一度お試しください。"
-
-    # --- LINEへの返信 ---
-    try:
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_text)],
-                )
-            )
-
-        app.logger.info("[handler] reply_message sent (画像)")
-
-    except Exception as e:
-        app.logger.error(f"[handler] unexpected error (reply): {e}")
-
-
-# ============================================
-# 非対応メッセージの共通ハンドラ（B-4-3）
-# ============================================
-# スタンプ・動画・音声・位置情報・ファイルは現在非対応。
-# 対応していないメッセージが送られたとき、案内メッセージを返す。
-
-for msg_type in [StickerMessageContent, VideoMessageContent,
-                 AudioMessageContent, LocationMessageContent,
-                 FileMessageContent]:
-    @handler.add(MessageEvent, message=msg_type)
-    def handle_unsupported(event):
-        """非対応メッセージを受信したときの共通ハンドラ"""
-        try:
-            with ApiClient(configuration) as api_client:
-                line_bot_api = MessagingApi(api_client)
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(
-                            text="📌 現在は画像・URL・テキストに対応しています。\nスクショやURLを送ってみてください！"
-                        )]
-                    )
-                )
-        except Exception as e:
-            app.logger.error(f"[handler] 非対応メッセージ返信エラー: {e}")
+@app.errorhandler(500)
+def server_error(e):
+    app.logger.error(f"Unhandled error: {e}")
+    return {"error": "Internal server error", "code": "INTERNAL_ERROR"}, 500
 
 
 # ============================================
 # サーバー起動（ローカル実行用）
 # ============================================
 if __name__ == "__main__":
-    # ローカルで python app.py を実行したときだけ動く
     app.run(debug=True)
