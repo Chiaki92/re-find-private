@@ -1,19 +1,37 @@
 # ai_classifier.py
 # Re:find 用の「テキスト・画像分類」共通関数
+# ※ OpenRouter → Azure OpenAI (gpt-5-mini) に変更
 
 import os
 import base64
 import json
-import requests
+from openai import AzureOpenAI  # Azure OpenAI 専用クライアント
 from dotenv import load_dotenv
 
 # ローカル開発時は .env を読み込む
 load_dotenv()
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# ===================================================
+# Azure OpenAI の接続情報（環境変数から取得）
+# Renderの環境変数 or .env に以下を設定してください:
+#   AZURE_OPENAI_API_KEY  : AzureポータルでコピーしたAPIキー
+#   AZURE_OPENAI_ENDPOINT : https://refind-openai.openai.azure.com/ のようなURL
+# ===================================================
+AZURE_API_KEY      = os.environ.get("AZURE_OPENAI_API_KEY")
+AZURE_ENDPOINT     = os.environ.get("AZURE_OPENAI_ENDPOINT")
+AZURE_API_VERSION  = "2024-12-01-preview"  # Azureが指定するAPIバージョン
+AZURE_DEPLOY_NAME  = "gpt-5-mini"          # Foundryでデプロイした名前
 
-# === 分類用プロンプト（B-2-2で決めたやつ） ===
+# Azure OpenAI クライアントを初期化
+# ※ このクライアントを通じてAPIを呼び出す
+client = AzureOpenAI(
+    api_key=AZURE_API_KEY,
+    azure_endpoint=AZURE_ENDPOINT,
+    api_version=AZURE_API_VERSION,
+)
+
+
+# === 分類用プロンプト（変更なし） ===
 BASE_PROMPT = """あなたは「Re:find」という、後で見返したい情報を整理するサービスの分類アシスタントです。
 
 ユーザーが保存したテキストを渡すので、
@@ -50,93 +68,79 @@ def build_prompt(text: str, existing_categories: list[str]) -> str:
     return BASE_PROMPT.format(categories=cats_str, text=text)
 
 
+def parse_ai_response(content: str, fallback_title: str) -> dict:
+    """
+    AIの返答文字列をJSONとしてパースする共通処理。
+    ``` json ``` 形式で返ってきた場合にも対応。
+    """
+    # ```json ... ``` 形式の場合にコードブロックを取り除く
+    if "```" in content:
+        part = content.split("```")
+        content = max(part, key=len)  # 一番長い部分をJSON候補とする
+        if content.strip().startswith("json"):
+            content = content.strip()[4:]
+
+    parsed = json.loads(content.strip())
+    return {
+        "title": parsed.get("title") or fallback_title,
+        "category": parsed.get("category") or "未分類",
+    }
+
+
 def classify_text(text: str, existing_categories: list[str] | None = None) -> dict:
     """
-    任意のテキストをAIに渡して、
-    {"title": ..., "category": ...} 形式の辞書を返す共通関数。
+    テキストをAIに渡して {"title": ..., "category": ...} を返す関数。
+    （URLのOGPテキストや手入力テキストに使用）
     """
     if existing_categories is None:
         existing_categories = []
 
-    if not OPENROUTER_API_KEY:
-        # 開発中に気づきやすいように例外にしておく
-        raise RuntimeError("OPENROUTER_API_KEY が設定されていません")
+    # 環境変数が設定されているか確認
+    if not AZURE_API_KEY or not AZURE_ENDPOINT:
+        raise RuntimeError(
+            "AZURE_OPENAI_API_KEY または AZURE_OPENAI_ENDPOINT が設定されていません"
+        )
 
     prompt = build_prompt(text, existing_categories)
 
     try:
-        resp = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://example.com",  # 本番で自分たちのURLに変える
-                "X-Title": "refind-ai-classifier",
-            },
-            json={
-                "model": "openrouter/free",  # まずは無料ルーターでOK
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-            },
+        # Azure OpenAI にテキストを送って分類してもらう
+        response = client.chat.completions.create(
+            model=AZURE_DEPLOY_NAME,       # Foundryでデプロイしたモデル名
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
             timeout=30,
         )
-        data = resp.json()
 
-        if resp.status_code != 200:
-            # エラー時はログだけ出してフォールバック
-            print("AI API エラー:", resp.status_code, data)
-            return {
-                "title": text[:30],
-                "category": "未分類",
-            }
+        # AIの返答テキストを取り出す
+        content = response.choices[0].message.content
 
-        content = data["choices"][0]["message"]["content"]
-
-        # もし ```json ... ``` 形式で返ってきた場合のガード
-        if "```" in content:
-            part = content.split("```")
-            # 一番長そうな部分を JSON 候補として扱う
-            content = max(part, key=len)
-            if content.strip().startswith("json"):
-                content = content.strip()[4:]
-
-        parsed = json.loads(content.strip())
-
-        return {
-            "title": parsed.get("title") or text[:30],
-            "category": parsed.get("category") or "未分類",
-        }
+        return parse_ai_response(content, fallback_title=text[:30])
 
     except Exception as e:
+        # エラーが起きても最低限動くようにフォールバック
         print("AI分類エラー:", e)
-        # 何かあっても最低限動くようにフォールバック
         return {
             "title": text[:30],
             "category": "未分類",
         }
 
 
-# ============================================
-# 画像分類関数（B-3 で追加）
-# ============================================
-
-def classify_image(image_bytes: bytes, existing_categories: list):
+def classify_image(image_bytes: bytes, existing_categories: list) -> dict:
     """
-    画像から
-    ・タイトル
-    ・カテゴリ
-    をAIで生成する関数
+    画像（スクショ）をAIに渡して {"title": ..., "category": ...} を返す関数。
+    GPT-5 miniはマルチモーダル対応なので画像を直接理解できる。
     """
 
     # ===============================
     # 画像をBase64に変換（API送信用）
+    # バイナリデータ → テキスト形式に変換してAPIに送る
     # ===============================
     base64_image = base64.b64encode(image_bytes).decode("utf-8")
-    image_data_url = f"data:image/png;base64,{base64_image}"
 
     # 既存カテゴリ一覧を文字列に変換
-    categories_str = ", ".join(existing_categories) if existing_categories else "なし"
+    categories_str = "、".join(existing_categories) if existing_categories else "なし"
 
     # ===============================
     # AIへの指示文（プロンプト）
@@ -150,64 +154,45 @@ def classify_image(image_bytes: bytes, existing_categories: list):
 既存カテゴリ:
 {categories_str}
 
-必ず以下の形式のみで出力:
+必ず以下の形式のみで出力（説明文不要）:
 {{"title":"〇〇","category":"〇〇"}}
 """
 
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    # モデル: google/gemma-3-27b-it:free（無料のマルチモーダルモデル）
-    # メッセージ形式: OpenAI互換の image_url 形式を使用
-    payload = {
-        "model": "google/gemma-3-27b-it:free",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_data_url}}
-                ]
-            }
-        ],
-    }
-
     try:
-        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
-        result = response.json()
+        # Azure OpenAI にテキスト＋画像を送って分類してもらう
+        # content を「テキスト」と「画像」のリスト形式で渡すのがマルチモーダルの書き方
+        response = client.chat.completions.create(
+            model=AZURE_DEPLOY_NAME,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        # テキストの指示
+                        {"type": "text", "text": prompt},
+                        # 画像データ（Base64エンコード済み）
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            timeout=60,  # 画像処理は時間がかかるので長めに設定
+        )
 
-        # APIエラーチェック
-        if response.status_code != 200:
-            print("画像AI APIエラー:", response.status_code, result)
-            return {"title": "画像メモ", "category": "未分類"}
+        # AIの返答テキストを取り出す
+        content = response.choices[0].message.content
 
-        content = result["choices"][0]["message"]["content"]
-
-        # 文字列の場合はJSONパースを試みる
-        if isinstance(content, str):
-            # ```json ... ``` で囲まれている場合に対応
-            if "```" in content:
-                part = content.split("```")
-                content_str = max(part, key=len)
-                if content_str.strip().startswith("json"):
-                    content_str = content_str.strip()[4:]
-                content = json.loads(content_str.strip())
-            else:
-                content = json.loads(content)
-
-        return {
-            "title": content.get("title", "画像メモ"),
-            "category": content.get("category", "未分類")
-        }
+        return parse_ai_response(content, fallback_title="画像メモ")
 
     except Exception as e:
-        print("AI解析エラー:", e)
+        print("AI画像解析エラー:", e)
         return {"title": "画像メモ", "category": "未分類"}
 
 
-# 単体テスト用
+# 単体テスト用（python ai_classifier.py で実行できる）
 if __name__ == "__main__":
     examples = [
         "駅前のピアノ教室。月曜16時に体験レッスンあり、小学生向け。",
