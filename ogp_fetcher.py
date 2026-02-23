@@ -18,7 +18,7 @@
 #   # → {"title": "記事タイトル", "description": "記事の説明", "image": "https://..."}
 #
 # 呼び出し元：
-#   app.py の URL受信ハンドラ（No.30 B-4-2 で実装予定）
+#   app.py の URL受信ハンドラ
 # ==============================================================
 
 import requests
@@ -31,10 +31,11 @@ def fetch_ogp(url):
     URLからOGP情報（タイトル・説明・画像URL）を取得する。
 
     処理の流れ：
-      1. URLにHTTPリクエストを送る
-      2. 返ってきたHTMLをBeautifulSoupで解析する
-      3. og:title, og:description, og:image のmetaタグを探す
-      4. 見つかった情報を辞書で返す
+      1. XのURLだった場合は fxtwitter.com に差し替える
+      2. URLにHTTPリクエストを送る
+      3. 返ってきたHTMLをBeautifulSoupで解析する
+      4. og:title, og:description, og:image のmetaタグを探す
+      5. 見つかった情報を辞書で返す
 
     取得できなかった場合のフォールバック（代替処理）：
       - OGPタグがない → HTMLの<title>タグから取得を試みる
@@ -53,30 +54,51 @@ def fetch_ogp(url):
     """
     try:
         # -------------------------------------------------------
-        # Step 1: URLにHTTPリクエストを送る
+        # Step 1: XのURLは fxtwitter.com に差し替える
         # -------------------------------------------------------
-        # timeout=10 : 10秒待っても応答がなければ諦める（アプリが固まるのを防ぐ）
-        # User-Agent : ブラウザからのアクセスに見せかける（Bot対策回避）
-        #   → 一部のサイトはBotからのアクセスをブロックするため必要
+        # XはBotからのOGP取得をブロックしているため、そのままアクセスすると
+        # タイムアウトしてしまう。
+        # fxtwitter.com はXの投稿内容をOGPとして返してくれる無料のプロキシサービス。
+        # ドメインを差し替えるだけでURL構造はそのまま使えるため実装コストが低い。
+        #
+        # 例:
+        #   https://x.com/user/status/123
+        #   → https://fxtwitter.com/user/status/123
+        #
+        # 注意: fxtwitter.com はサードパーティのサービスのため、
+        #       サービス停止時は取得できなくなるリスクがある。
+        if "x.com" in url or "twitter.com" in url:
+            url = url.replace("twitter.com", "fxtwitter.com") \
+                     .replace("x.com", "fxtwitter.com")
+
+        # -------------------------------------------------------
+        # Step 2: URLにHTTPリクエストを送る
+        # -------------------------------------------------------
+        # fxtwitter.com はUser-Agentを見て動作を切り替える。
+        # ブラウザのUser-AgentだとXに転送してしまうため、
+        # XのURLの場合はDiscordボットのUser-Agentを使う。
+        # それ以外の通常URLはブラウザのUser-Agentを使う。
+        if "fxtwitter.com" in url:
+            # Discordのボット用User-Agent（fxtwitter がOGPを返す条件）
+            user_agent = "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"
+        else:
+            # 通常サイト用（ブラウザに見せかける）
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
         response = requests.get(
             url,
             timeout=10,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
+            headers={"User-Agent": user_agent}
         )
 
-        # ステータスコードが200番台以外（404エラー等）ならエラーを発生させる
-        response.raise_for_status()
-
         # -------------------------------------------------------
-        # Step 2: HTMLをBeautifulSoupで解析する
+        # Step 3: HTMLをBeautifulSoupで解析する
         # -------------------------------------------------------
         # "html.parser" : Python標準のHTMLパーサー（追加インストール不要）
         soup = BeautifulSoup(response.text, "html.parser")
 
         # -------------------------------------------------------
-        # Step 3: OGPのmetaタグを探す
+        # Step 4: OGPのmetaタグを探す
         # -------------------------------------------------------
         # soup.find("meta", property="og:title") は以下のようなタグを探す：
         #   <meta property="og:title" content="ページのタイトル">
@@ -84,16 +106,16 @@ def fetch_ogp(url):
         # 見つかった場合 → タグオブジェクトが返る → ["content"]で中身を取得
         # 見つからなかった場合 → None が返る
         og_title = soup.find("meta", property="og:title")
-        og_desc = soup.find("meta", property="og:description")
+        og_desc  = soup.find("meta", property="og:description")
         og_image = soup.find("meta", property="og:image")
 
         # OGPタグが見つかった場合は content 属性の値を取得、なければ None
-        title = og_title["content"] if og_title else None
-        description = og_desc["content"] if og_desc else None
-        image = og_image["content"] if og_image else None
+        title       = og_title["content"] if og_title else None
+        description = og_desc["content"]  if og_desc  else None
+        image       = og_image["content"] if og_image else None
 
         # -------------------------------------------------------
-        # Step 4: フォールバック処理（OGPタイトルがない場合）
+        # Step 5: フォールバック処理（OGPタイトルがない場合）
         # -------------------------------------------------------
         if not title:
             # OGPタイトルがない → HTMLの<title>タグを探す
@@ -104,12 +126,12 @@ def fetch_ogp(url):
             # それもなければ URL そのものをタイトルにする
 
         # -------------------------------------------------------
-        # Step 5: 結果を辞書で返す
+        # Step 6: 結果を辞書で返す
         # -------------------------------------------------------
         return {
-            "title": title or url,          # Noneや空文字の場合はURLを使う
-            "description": description or "",  # Noneの場合は空文字にする
-            "image": image                  # 画像URLはNoneのままでもOK
+            "title":       title or url,          # Noneや空文字の場合はURLを使う
+            "description": description or "",     # Noneの場合は空文字にする
+            "image":       image                  # 画像URLはNoneのままでもOK
         }
 
     except Exception as e:
@@ -117,9 +139,9 @@ def fetch_ogp(url):
         # エラー時のフォールバック処理
         # -------------------------------------------------------
         # どんなエラーでもアプリが落ちないようにキャッチする
-        # - requests.exceptions.Timeout : タイムアウト
-        # - requests.exceptions.ConnectionError : 接続エラー
-        # - requests.exceptions.HTTPError : 404, 500等
+        # - requests.exceptions.Timeout        : タイムアウト
+        # - requests.exceptions.ConnectionError: 接続エラー
+        # - requests.exceptions.HTTPError      : 404, 500等
         # - その他の予期しないエラー
         print(f"OGP取得エラー ({url}): {e}")
 
@@ -128,13 +150,28 @@ def fetch_ogp(url):
         domain = urlparse(url).netloc
 
         return {
-            "title": domain or url,    # ドメイン名が取れなければURLそのもの
+            "title":       domain or url,  # ドメイン名が取れなければURLそのもの
             "description": "",
-            "image": None
+            "image":       None
         }
 
 
+# ==============================================================
+# 単体テスト用（このファイルを直接実行したときだけ動く）
+# ==============================================================
+# 実行方法:
+#   python ogp_fetcher.py
+if __name__ == "__main__":
+    test_urls = [
+        # XのURL（fxtwitter.comへの差し替えが動くか確認）
+        "https://x.com/ai_hakase_/status/2025918986802651411?s=53",
+        # 普通のURL（従来通り動くか確認）
+        "https://qiita.com",
+    ]
 
-
-
-
+    for url in test_urls:
+        print(f"\n--- テスト: {url} ---")
+        result = fetch_ogp(url)
+        print(f"title      : {result['title']}")
+        print(f"description: {result['description']}")
+        print(f"image      : {result['image']}")
