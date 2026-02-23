@@ -239,6 +239,17 @@ if DEV_MODE:
 # ルート（URL）の設定
 # ============================================
 
+# ========================================
+# ヘルスチェック用エンドポイント
+# UptimeRobotなどの死活監視サービスが定期的にアクセスしてくる
+# これによりRenderのスリープを防止する
+# ========================================
+@app.route("/health")
+def health_check():
+    """UptimeRobot等の監視サービス用。認証不要・軽量。"""
+    return {"status": "ok", "message": "Re:find is running"}, 200
+
+
 @app.route("/")
 @login_required
 def index():
