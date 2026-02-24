@@ -40,6 +40,18 @@
     </div>
 </div>
 
+{# ===== ソートコントロール ===== #}
+{% if item_count > 0 %}
+<div class="search-sort-bar" style="justify-content: flex-end;">
+    <select id="sort-select" class="sort-select">
+        <option value="category">カテゴリ順</option>
+        <option value="newest">登録が新しい順</option>
+        <option value="oldest">登録が古い順</option>
+        <option value="title">タイトル順</option>
+    </select>
+</div>
+{% endif %}
+
 {# ===== アイテムグリッド（index.css の .item-grid を再利用） ===== #}
 <div class="item-grid">
 
@@ -57,7 +69,10 @@
     {% for item in items %}
     {# ----- 個別のカード（index.html と同じ構造） ----- #}
     <div class="item-card"
-         data-status="{{ item.status }}">
+         data-status="{{ item.status }}"
+         data-title="{{ item.title or '' }}"
+         data-category-name="{{ item.category_name or '未分類' }}"
+         data-created-at="{{ item.created_at or '' }}">
 
         {# --- サムネイル部分 --- #}
         <div class="item-card-thumb">
@@ -96,4 +111,58 @@
 
 </div>
 
+{% endblock %}
+
+{# ===== ソート用JavaScript ===== #}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var sortSelect = document.getElementById('sort-select');
+    var itemGrid = document.querySelector('.item-grid');
+    if (!sortSelect || !itemGrid) return;
+
+    var cards = document.querySelectorAll('.item-card');
+
+    sortSelect.addEventListener('change', function() {
+        var sortKey = this.value;
+        var cardArray = Array.from(cards);
+
+        cardArray.sort(function(a, b) {
+            switch (sortKey) {
+                case 'newest':
+                    return compareDates(b, a);
+                case 'oldest':
+                    return compareDates(a, b);
+                case 'category':
+                    var catA = a.getAttribute('data-category-name') || '';
+                    var catB = b.getAttribute('data-category-name') || '';
+                    var catCompare = catA.localeCompare(catB, 'ja');
+                    if (catCompare !== 0) return catCompare;
+                    return compareDates(b, a);
+                case 'title':
+                    var titleA = a.getAttribute('data-title') || '';
+                    var titleB = b.getAttribute('data-title') || '';
+                    return titleA.localeCompare(titleB, 'ja');
+                default:
+                    return 0;
+            }
+        });
+
+        cardArray.forEach(function(card) {
+            itemGrid.appendChild(card);
+        });
+    });
+
+    function compareDates(a, b) {
+        var dateA = a.getAttribute('data-created-at') || '';
+        var dateB = b.getAttribute('data-created-at') || '';
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+    }
+
+    // 初期表示でカテゴリ順ソートを適用
+    sortSelect.dispatchEvent(new Event('change'));
+});
+</script>
 {% endblock %}
