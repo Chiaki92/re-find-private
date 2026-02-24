@@ -197,4 +197,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
         emptyState.style.display = visibleCount === 0 ? '' : 'none';
     }
+
+
+    /* ----------------------------------------------------------
+       7. URLハッシュによるカテゴリ自動選択
+
+       共有ページからの遷移時 /?openExternalBrowser=1#cat-カテゴリ名
+       のようなURLで来た場合、該当カテゴリタブを自動選択する。
+       ---------------------------------------------------------- */
+
+    var hash = decodeURIComponent(location.hash);
+    if (hash.startsWith('#cat-')) {
+        var catName = hash.substring(5);
+        var targetTab = document.querySelector('[data-category="' + catName + '"]');
+        if (targetTab) {
+            targetTab.click();
+        }
+    }
 });
