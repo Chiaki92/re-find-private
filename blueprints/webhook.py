@@ -75,6 +75,27 @@ def handle_text_message(event):
 
     reply_text = "⚠️ 保存中にエラーが発生しました。\nもう一度お試しください。"
 
+    # 使い方ガイドのキーワードに反応する
+    if "使い方" in text:
+        usage_text = (
+            "📌 Re:find の使い方\n\n"
+            "送るだけで自動保存！\n"
+            "🖼 画像（スクリーンショット）\n"
+            "🔗 URL\n"
+            "📝 テキスト（メモ）\n\n"
+            "保存した情報は毎日リマインドが届きます。\n"
+            "忘れてたことを再発見できますよ！"
+        )
+        with ApiClient(line_configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=usage_text)],
+                )
+            )
+        return
+
     url = is_url(text)
 
     try:
