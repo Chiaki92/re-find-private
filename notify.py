@@ -90,7 +90,7 @@ def fetch_pending_items():
     now = datetime.now(JST).isoformat()
     res = (
         supabase.table("items")
-        .select("id, line_user_id, title, notify_count, created_at, categories(name)")
+        .select("id, line_user_id, title, notify_count, next_notify_at, created_at, categories(name)")
         .eq("status", "pending")
         .is_("deleted_at", "null")
         .lte("next_notify_at", now)
@@ -234,6 +234,20 @@ def update_item(item, notify_time="21:00"):
         }).eq("id", item["id"]).execute()
 
 
+# ── アイテムの巻き戻し（送信失敗時） ─────────────────
+def revert_item(item):
+    """
+    LINE送信が失敗した場合に update_item() の変更を元に戻す。
+    next_notify_at と notify_count を送信前の値に復元する。
+    """
+    supabase.table("items").update({
+        "notify_count": item["notify_count"],
+        "next_notify_at": item["next_notify_at"],
+        "status": "pending",
+        "updated_at": datetime.now(JST).isoformat(),
+    }).eq("id", item["id"]).execute()
+
+
 # ── LINE Push Message 送信 ─────────────────────────
 def send_line_message(line_user_id, text):
     """
@@ -307,20 +321,39 @@ def main():
             success_count += 1
             continue
 
+        # 6. DB更新を先に行う（再送防止）
+        #    LINE送信前に next_notify_at を未来に設定しておくことで、
+        #    送信後にスクリプトがクラッシュしても同じ通知が再送されない
+        updated_items = []
+        for item in user_items:
+            try:
+                update_item(item, notify_time)
+                updated_items.append(item)
+            except Exception as e:
+                log.error(f"DB更新失敗: item={item['id']} - {e}")
+
+        if not updated_items:
+            log.error(f"全アイテムのDB更新失敗、送信スキップ: {line_user_id}")
+            fail_count += 1
+            continue
+
+        # 7. LINE送信（失敗したらDB更新を巻き戻す）
         try:
             send_line_message(line_user_id, message)
-            log.info(f"送信OK: {line_user_id} ({len(user_items)}件)")
+            log.info(f"送信OK: {line_user_id} ({len(updated_items)}件)")
             success_count += 1
         except Exception as e:
             log.error(f"送信失敗: {line_user_id} - {e}")
             fail_count += 1
-            continue  # 送信失敗したユーザーのアイテムは更新しない
+            for item in updated_items:
+                try:
+                    revert_item(item)
+                    log.info(f"DB巻き戻しOK: item={item['id']}")
+                except Exception as re_err:
+                    log.error(f"DB巻き戻し失敗: item={item['id']} - {re_err}")
+            continue
 
-        # 6. 送信成功 → notify_count と next_notify_at を更新
-        for item in user_items:
-            update_item(item, notify_time)
-
-        # 7. 通知ログを記録
+        # 8. 通知ログを記録
         item_ids = [i["id"] for i in user_items]
         log_activity(
             line_user_id,
