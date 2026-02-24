@@ -131,11 +131,20 @@ def calc_days_since(created_at_str):
         return "?"
 
 
+# ── カテゴリ別グループ化 ─────────────────────────
+def _group_by_category(items):
+    """アイテムをカテゴリ名ごとにグループ化する（出現順を保持）"""
+    grouped = defaultdict(list)
+    for item in items:
+        grouped[item["category_name"]].append(item)
+    return grouped
+
+
 # ── 通知メッセージの組み立て ───────────────────────
 def build_message(items):
     """
     ユーザーに送信する1通分のメッセージを組み立てる。
-    - 通常通知（1〜5回目）: カテゴリ名と通知回数を表示
+    - 通常通知（1〜5回目）: カテゴリごとにグループ化して件数表示
     - 最終通知（6回目）: 経過日数付きの特別な文面
     """
     # notify_count は送信前の値。MAX_NOTIFY_COUNT - 1 以上なら最終通知
@@ -148,16 +157,16 @@ def build_message(items):
     if normal_items:
         lines.append(f"📬 {len(normal_items)}件の情報が待っています\n")
 
-        for item in normal_items:
-            count     = item["notify_count"] + 1
-            category  = item["category_name"]
-            title     = item.get("title") or "（タイトルなし）"
-            share_url = item.get("share_url", "")
+        for category, cat_items in _group_by_category(normal_items).items():
+            lines.append(f"📁 {category}（{len(cat_items)}件）")
+            for item in cat_items:
+                count     = item["notify_count"] + 1
+                title     = item.get("title") or "（タイトルなし）"
+                share_url = item.get("share_url", "")
 
-            lines.append(f"📁 {category}｜{count}回目")
-            lines.append(title)
-            if share_url:
-                lines.append(share_url)
+                lines.append(f"  ・{title}｜{count}回目")
+                if share_url:
+                    lines.append(f"    {share_url}")
             lines.append("")
 
     # ── 最終通知ブロック ──
@@ -170,16 +179,16 @@ def build_message(items):
         if len(final_items) > 1:
             lines.append("以下の情報への通知が今回で終わります。\n")
 
-        for item in final_items:
-            category  = item["category_name"]
-            title     = item.get("title") or "（タイトルなし）"
-            days_ago  = calc_days_since(item["created_at"])
-            share_url = item.get("share_url", "")
+        for category, cat_items in _group_by_category(final_items).items():
+            lines.append(f"📁 {category}（{len(cat_items)}件）")
+            for item in cat_items:
+                title     = item.get("title") or "（タイトルなし）"
+                days_ago  = calc_days_since(item["created_at"])
+                share_url = item.get("share_url", "")
 
-            lines.append(f"📁 {category}")
-            lines.append(f"{title}（{days_ago}日前）")
-            if share_url:
-                lines.append(share_url)
+                lines.append(f"  ・{title}（{days_ago}日前）")
+                if share_url:
+                    lines.append(f"    {share_url}")
             lines.append("")
 
         lines.append("まだ気になるものは「未対応」に戻せます。")

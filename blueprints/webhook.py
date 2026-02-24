@@ -168,10 +168,23 @@ def handle_text_message(event):
         if getattr(insert_res, "error", None):
             logger.error(f"[supabase] insert item error: {insert_res.error}")
 
+        # カテゴリ内の件数を取得
+        item_count = 0
+        if category_id:
+            count_res = supabase_admin.table("items") \
+                .select("id", count="exact") \
+                .eq("line_user_id", user_id) \
+                .eq("category_id", category_id) \
+                .is_("deleted_at", "null") \
+                .execute()
+            item_count = count_res.count or 0
+
+        count_label = f"（{item_count}件目）" if item_count else ""
+
         if url:
-            reply_text = f"🔗 「{category_name}」に保存しました！\nタイトル: {title}"
+            reply_text = f"🔗 「{category_name}」に保存しました！{count_label}\nタイトル: {title}\n🌐 {url}"
         else:
-            reply_text = f"📝 「{category_name}」に保存しました！\nタイトル: {title}"
+            reply_text = f"📝 「{category_name}」に保存しました！{count_label}\nタイトル: {title}"
 
         msg_type = "url" if url else "text"
         log_activity(user_id, "bot_message", metadata={"message_type": msg_type})
@@ -286,7 +299,19 @@ def handle_image_message(event):
         if getattr(insert_res, "error", None):
             logger.error(f"[supabase] insert item error: {insert_res.error}")
 
-        reply_text = f"📷 「{category_name}」に保存しました！\nタイトル: {title}"
+        # カテゴリ内の件数を取得
+        item_count = 0
+        if category_id:
+            count_res = supabase_admin.table("items") \
+                .select("id", count="exact") \
+                .eq("line_user_id", user_id) \
+                .eq("category_id", category_id) \
+                .is_("deleted_at", "null") \
+                .execute()
+            item_count = count_res.count or 0
+
+        count_label = f"（{item_count}件目）" if item_count else ""
+        reply_text = f"📷 「{category_name}」に保存しました！{count_label}\nタイトル: {title}"
 
         log_activity(user_id, "bot_message", metadata={"message_type": "image"})
 
