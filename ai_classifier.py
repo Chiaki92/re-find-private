@@ -3,6 +3,7 @@
 # ※ GPT-5 mini は新しい Responses API を使うため、chat.completions ではなく responses を使用
 
 import os
+import re
 import base64
 import json
 from openai import AzureOpenAI
@@ -29,56 +30,72 @@ client = AzureOpenAI(
 )
 
 
-# === 分類用プロンプト ===
-BASE_PROMPT = """あなたは「Re:find」という、後で見返したい情報を整理するサービスの分類アシスタントです。
+# === 分類用プロンプト（テキスト・画像で共通使用）===
+BASE_PROMPT = """あなたはRe:findの分類アシスタントです。
+Re:findは「後でやろうと思って保存した情報を埋もれさせない」サービスです。
 
-ユーザーが保存したテキストを渡すので、
-以下のJSON形式で「タイトル」と「カテゴリ」を決めてください。
+以下のJSONのみを返してください。説明文・改行・コードブロック記号は一切不要です。
+{{"title": "タイトル", "category": "カテゴリ名"}}
 
-返すJSONの形式（必ずこの通りにしてください）:
-{{"title": "20文字以内の簡潔なタイトル", "category": "カテゴリ名"}}
+【titleのルール】
+- 20文字以内の日本語
+- ユーザーが後から見て内容をすぐ思い出せる具体的な表現にする
+- 例: 「ピアノ教室の体験レッスン情報」「楽天クーポンの使い方」
 
-【ルール】
-- 出力はJSONのみとし、日本語の説明文やコードブロック記号（```）は一切書かないこと。
-- title は、ユーザーが後から見たときに内容を思い出せる短い日本語にすること。
-  - 例: 「ピアノ教室の体験レッスン情報」「楽天スーパーセールのクーポン」など。
-- category は、「何のための情報か」が一言で分かる名前にすること。
-  - 例: 「習い事」「買い物候補」「レシピ」「仕事の連絡」「旅行」「健康」「家計」など。
-- すでに存在するカテゴリ一覧が与えられるので、合うものがあればその名前をそのまま使うこと。
-- 合うカテゴリがなければ、新しいカテゴリ名を作ってよい。
-- カテゴリ名は8文字以内の日本語（ひらがな・カタカナ・漢字）にすること。
-- 曖昧な場合は、ユーザーが「後で行動したい軸」に近いカテゴリを選ぶこと（例: 買う・申し込む・読む・相談する など）。
+【categoryのルール】
+- 8文字以内の日本語（ひらがな・カタカナ・漢字）
+- 「何をしたい情報か」が一言でわかる名前
+- 既存カテゴリに合うものがあれば必ずそのまま使う
+- なければ新しく作る（例: 習い事・買い物候補・レシピ・旅行・健康・家計・読みたい）
+- 迷ったら「後でどう行動するか」の軸で判断する（買う・申し込む・読む・相談する）
+- 分類が難しければ「記事」でまとめる
 
 【既存カテゴリ一覧】
 {categories}
 
-【分類したいテキスト】
-{text}
-"""
+【分類するテキスト】
+{text}"""
+
+
+def _check_env() -> None:
+    """環境変数が設定されているか確認する。未設定の場合は RuntimeError を送出する。"""
+    if not AZURE_API_KEY or not AZURE_ENDPOINT:
+        raise RuntimeError(
+            "AZURE_OPENAI_API_KEY または AZURE_OPENAI_ENDPOINT が設定されていません"
+        )
 
 
 def build_prompt(text: str, existing_categories: list[str]) -> str:
     """既存カテゴリ＋テキストから、実際に投げるプロンプト文字列を組み立てる"""
-    cats_str = "、".join(existing_categories) if existing_categories else "なし"
+    # カテゴリが空のときは明示的に「なし」と伝える
+    cats_str = "、".join(existing_categories) if existing_categories else "（まだカテゴリはありません。新しく作成してください）"
     return BASE_PROMPT.format(categories=cats_str, text=text)
 
 
 def parse_ai_response(content: str, fallback_title: str) -> dict:
     """
     AIの返答文字列をJSONとしてパースする共通処理。
-    ``` json ``` 形式で返ってきた場合にも対応。
+    ``` json ``` 形式で返ってきた場合や、前後に余計なテキストがある場合にも対応。
+    パース失敗時はフォールバック値を返す（例外を握りつぶさずに済む）。
     """
-    if "```" in content:
-        part = content.split("```")
-        content = max(part, key=len)
-        if content.strip().startswith("json"):
-            content = content.strip()[4:]
+    # ``` json ``` や ``` ``` のコードブロック記号を除去
+    content = re.sub(r"```[a-z]*\n?", "", content).strip()
 
-    parsed = json.loads(content.strip())
-    return {
-        "title": parsed.get("title") or fallback_title,
-        "category": parsed.get("category") or "未分類",
-    }
+    # JSON部分だけ正規表現で抽出（前後に余計なテキストが混入しても対応できる）
+    match = re.search(r'\{.*?\}', content, re.DOTALL)
+    if not match:
+        # JSONが見つからなければフォールバック
+        return {"title": fallback_title, "category": "未分類"}
+
+    try:
+        parsed = json.loads(match.group())
+        return {
+            "title": parsed.get("title") or fallback_title,
+            "category": parsed.get("category") or "未分類",
+        }
+    except json.JSONDecodeError:
+        # パース失敗時もフォールバック（本番でクラッシュしないようにする）
+        return {"title": fallback_title, "category": "未分類"}
 
 
 def detect_mime_type(image_bytes: bytes) -> str:
@@ -99,13 +116,10 @@ def classify_text(text: str, existing_categories: list[str] | None = None) -> di
     テキストをAIに渡して {"title": ..., "category": ...} を返す関数。
     GPT-5 mini は Responses API を使うため client.responses.create() を使用。
     """
+    _check_env()  # 環境変数チェック（未設定なら即エラー）
+
     if existing_categories is None:
         existing_categories = []
-
-    if not AZURE_API_KEY or not AZURE_ENDPOINT:
-        raise RuntimeError(
-            "AZURE_OPENAI_API_KEY または AZURE_OPENAI_ENDPOINT が設定されていません"
-        )
 
     prompt = build_prompt(text, existing_categories)
 
@@ -127,11 +141,16 @@ def classify_text(text: str, existing_categories: list[str] | None = None) -> di
         return {"title": text[:30], "category": "未分類"}
 
 
-def classify_image(image_bytes: bytes, existing_categories: list) -> dict:
+def classify_image(image_bytes: bytes, existing_categories: list[str] | None = None) -> dict:
     """
     画像（スクショ）をAIに渡して {"title": ..., "category": ...} を返す関数。
     GPT-5 miniはマルチモーダル対応。JPEG・PNG どちらも自動判定して対応する。
+    テキスト分類と同じ BASE_PROMPT を使うことで、分類ルールを統一している。
     """
+    _check_env()  # 環境変数チェック（未設定なら即エラー）
+
+    if existing_categories is None:
+        existing_categories = []
 
     # 画像をBase64に変換（API送信用）
     base64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -140,21 +159,12 @@ def classify_image(image_bytes: bytes, existing_categories: list) -> dict:
     mime_type = detect_mime_type(image_bytes)
     print(f"画像のMIMEタイプ: {mime_type}")
 
-    # 既存カテゴリ一覧を文字列に変換
-    categories_str = "、".join(existing_categories) if existing_categories else "なし"
-
-    prompt_text = f"""
-この画像を見て、
-・20文字以内のタイトル
-・8文字以内のカテゴリ
-をJSON形式で出力してください。
-
-既存カテゴリ:
-{categories_str}
-
-必ず以下の形式のみで出力（説明文不要）:
-{{"title":"〇〇","category":"〇〇"}}
-"""
+    # テキスト・画像で同じルールを適用するため BASE_PROMPT を共用する
+    # 「テキスト」の部分には画像を読み取るよう指示を入れておく
+    prompt_text = build_prompt(
+        text="（以下の画像の内容を読み取って分類してください）",
+        existing_categories=existing_categories,
+    )
 
     try:
         # Responses API でマルチモーダル（テキスト＋画像）を送る形式
@@ -164,7 +174,7 @@ def classify_image(image_bytes: bytes, existing_categories: list) -> dict:
                 {
                     "role": "user",
                     "content": [
-                        # テキストの指示
+                        # テキストの指示（BASE_PROMPTと同じルール）
                         {"type": "input_text", "text": prompt_text},
                         # 画像データ（Base64エンコード済み、MIMEタイプ自動判定）
                         {
