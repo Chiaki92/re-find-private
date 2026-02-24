@@ -50,6 +50,8 @@
         <button class="category-tab" data-category="{{ category.id }}">{{ category.name }}</button>
         {% endfor %}
     </div>
+    <!-- 今日の通知一覧ページへのリンク（LINE緑で視覚的に区別） -->
+    <a href="/notify-list" class="notify-today-btn" title="今日の通知一覧">📬 今日</a>
 </div>
 
 {# ----------------------------------------------------------

@@ -34,8 +34,9 @@ JST = timezone(timedelta(hours=9))
 
 # LINEアプリ内ブラウザだと Cookie が不安定でセッションが切れるため
 # ?openExternalBrowser=1 を付けて外部ブラウザで開かせる
-WEB_URL = "https://re-find.onrender.com/?openExternalBrowser=1"
-BASE_SHARE_URL = "https://re-find.onrender.com/share"
+BASE_URL = "https://re-find.onrender.com"
+WEB_URL = f"{BASE_URL}/?openExternalBrowser=1"
+BASE_SHARE_URL = f"{BASE_URL}/share"
 
 # 忘却曲線に基づく通知間隔（notify_count → 次回通知までの日数）
 # count 0: 保存翌日  → count 1: 3日後 → count 2: 7日後
@@ -49,6 +50,9 @@ NOTIFY_INTERVALS = {
     5: 60,   # 60日後（最終通知）
 }
 MAX_NOTIFY_COUNT = 6  # この回数に達したら status を 'archived' に変更
+
+# この件数以下なら詳細テキスト、超えたら目次形式でLINEに送る
+NOTIFY_DETAIL_LIMIT = 5
 
 logging.basicConfig(
     level=logging.INFO,
@@ -141,12 +145,18 @@ def _group_by_category(items):
 
 
 # ── 通知メッセージの組み立て ───────────────────────
-def build_message(items):
+def build_message(items, notify_date_str=None):
     """
     ユーザーに送信する1通分のメッセージを組み立てる。
-    - 通常通知（1〜5回目）: カテゴリごとにグループ化して件数表示
+    - 通常通知（1〜5回目）:
+      - NOTIFY_DETAIL_LIMIT 以下: カテゴリ×タイトル×共有URL（詳細形式）
+      - NOTIFY_DETAIL_LIMIT 超:   番号×タイトルの目次形式
     - 最終通知（6回目）: 経過日数付きの特別な文面
+    - 末尾に通知一覧ページURLを常に添付
     """
+    if notify_date_str is None:
+        notify_date_str = datetime.now(JST).strftime("%Y-%m-%d")
+
     # notify_count は送信前の値。MAX_NOTIFY_COUNT - 1 以上なら最終通知
     final_items  = [i for i in items if i["notify_count"] >= MAX_NOTIFY_COUNT - 1]
     normal_items = [i for i in items if i["notify_count"] <  MAX_NOTIFY_COUNT - 1]
@@ -155,18 +165,28 @@ def build_message(items):
 
     # ── 通常通知ブロック ──
     if normal_items:
-        lines.append(f"📬 {len(normal_items)}件の情報が待っています\n")
+        if len(normal_items) <= NOTIFY_DETAIL_LIMIT:
+            # === 詳細形式（従来通り） ===
+            lines.append(f"📬 {len(normal_items)}件の情報が待っています\n")
 
-        for category, cat_items in _group_by_category(normal_items).items():
-            lines.append(f"📁 {category}（{len(cat_items)}件）")
-            for item in cat_items:
-                count     = item["notify_count"] + 1
-                title     = item.get("title") or "（タイトルなし）"
-                share_url = item.get("share_url", "")
+            for category, cat_items in _group_by_category(normal_items).items():
+                lines.append(f"📁 {category}（{len(cat_items)}件）")
+                for item in cat_items:
+                    count     = item["notify_count"] + 1
+                    title     = item.get("title") or "（タイトルなし）"
+                    share_url = item.get("share_url", "")
 
-                lines.append(f"  ・{title}｜{count}回目")
-                if share_url:
-                    lines.append(f"    {share_url}")
+                    lines.append(f"  ・{title}｜{count}回目")
+                    if share_url:
+                        lines.append(f"    {share_url}")
+                lines.append("")
+        else:
+            # === 目次形式（件数が多い場合） ===
+            lines.append(f"📬 {len(normal_items)}件の情報があります\n")
+            lines.append("＜目次＞")
+            for i, item in enumerate(normal_items, 1):
+                title = item.get("title") or "（タイトルなし）"
+                lines.append(f"{i}. {title}")
             lines.append("")
 
     # ── 最終通知ブロック ──
@@ -196,9 +216,13 @@ def build_message(items):
         if normal_items:
             lines.append("─────────────────")
 
-    # ── Webアプリへのリンク ──
+    # ── 通知一覧ページへのリンク ──
+    notify_list_url = f"{BASE_URL}/notify-list?date={notify_date_str}&openExternalBrowser=1"
     lines.append("")
-    lines.append(f"▶ Webアプリで確認する\n{WEB_URL}")
+    lines.append(f"▶ 今日の通知一覧を確認する\n{notify_list_url}")
+
+    # ── Webアプリへのリンク ──
+    lines.append(f"\n▶ Webアプリで確認する\n{WEB_URL}")
     return "\n".join(lines)
 
 
@@ -313,7 +337,8 @@ def main():
                 item["share_url"] = ""
 
         # 5. メッセージを組み立てて送信
-        message = build_message(user_items)
+        today_str = datetime.now(JST).strftime("%Y-%m-%d")
+        message = build_message(user_items, notify_date_str=today_str)
 
         if dry_run:
             log.info(f"[DRY RUN] 送信先: {line_user_id} ({len(user_items)}件)")

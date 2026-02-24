@@ -201,6 +201,11 @@ def settings_page():
 
     settings = res.data[0] if res.data else {"notify_time": "21:00", "notify_enabled": True}
 
+    # DB の time 型は "21:00:00" のように秒付きで返る場合があるため
+    # テンプレートの "HH:MM" 形式と一致するよう先頭5文字に切り詰める
+    raw_time = settings.get("notify_time", "21:00")
+    settings["notify_time"] = raw_time[:5] if raw_time else "21:00"
+
     return render_template("settings.html", settings=settings)
 
 
@@ -236,6 +241,79 @@ def shared_item_page(token):
     except Exception as e:
         app.logger.error(f"共有リンクエラー: {e}")
         return render_template("shared_item.html", item=None)
+
+
+@app.route("/notify-list")
+@login_required
+def notify_list():
+    """
+    通知一覧ページ。
+    LINEの通知メッセージ末尾のURLから遷移する。
+    指定日に通知したアイテムをタイル表示する。
+
+    クエリパラメータ:
+        date: 表示する日付（YYYY-MM-DD形式）。省略時は今日（JST）
+    """
+    line_user_id = get_current_user_line_id()
+
+    # ---- 日付パラメータの取得 ----
+    date_str = request.args.get("date")
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = datetime.now(JST).date()
+    else:
+        target_date = datetime.now(JST).date()
+
+    date_display = target_date.strftime("%Y-%m-%d")
+    next_date_str = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # ---- user_activity_logs から notification_sent を検索 ----
+    items_list = []
+    try:
+        logs_res = supabase_admin.table("user_activity_logs") \
+            .select("metadata") \
+            .eq("line_user_id", line_user_id) \
+            .eq("action_type", "notification_sent") \
+            .gte("created_at", f"{date_display}T00:00:00+09:00") \
+            .lt("created_at", f"{next_date_str}T00:00:00+09:00") \
+            .execute()
+
+        # metadata JSON から item_ids を収集
+        all_item_ids = []
+        for log_row in (logs_res.data or []):
+            meta = log_row.get("metadata")
+            if isinstance(meta, str):
+                import json as _json
+                meta = _json.loads(meta)
+            if meta and isinstance(meta, dict):
+                all_item_ids.extend(meta.get("item_ids", []))
+
+        unique_ids = list(set(all_item_ids))
+
+        if unique_ids:
+            items_res = supabase_admin.table("items") \
+                .select("*, categories(name)") \
+                .eq("line_user_id", line_user_id) \
+                .in_("id", unique_ids) \
+                .is_("deleted_at", "null") \
+                .execute()
+
+            for item in (items_res.data or []):
+                cat = item.pop("categories", None)
+                item["category_name"] = cat["name"] if cat else "未分類"
+                items_list.append(item)
+
+    except Exception as e:
+        app.logger.error(f"通知一覧取得エラー: {e}")
+
+    return render_template(
+        "notify_list.html",
+        items=items_list,
+        date_str=date_display,
+        item_count=len(items_list),
+    )
 
 
 # ============================================

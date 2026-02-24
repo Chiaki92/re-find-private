@@ -37,7 +37,7 @@
          表示テキストは "7:00" のようにゼロ埋めなし（読みやすさ重視）。
          settings.notify_time と一致する option に selected を付与。 #}
     <select id="notify-time" class="settings-select">
-        {% for h in range(7, 24) %}
+        {% for h in range(0, 24) %}
         <option value="{{ '%02d:00' % h }}"
                 {% if settings.notify_time == '%02d:00' % h %}selected{% endif %}>
             {{ '%d:00' % h }}

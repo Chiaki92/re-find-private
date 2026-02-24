@@ -22,6 +22,10 @@
     /* 左右の余白をはみ出させて、端のタブが見切れないようにする */
     margin: 0 -12px;
     padding: 12px 12px 8px;
+    /* タブとボタンを横並びに配置する */
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .category-tabs {
@@ -30,6 +34,8 @@
     overflow-x: auto;               /* 横スクロール可能にする */
     -webkit-overflow-scrolling: touch;  /* iOS のスムーズスクロール */
     padding-bottom: 4px;            /* スクロールバーのスペース */
+    flex: 1;                        /* 残りの幅をすべて占める */
+    min-width: 0;                   /* ボタンがあるときに正しく縮む */
 }
 
 /* スクロールバーを非表示にする（見た目をスッキリ） */
@@ -329,4 +335,32 @@
 .empty-state-hint {
     color: #D4C4B0;
     font-size: 12px;
+}
+
+
+/* ----------------------------------------------------------
+   6. 「📬 今日」ボタン（通知一覧へのリンク）
+
+   カテゴリタブの右端に固定表示する。
+   LINE緑（--color-success）でフィルタータブと視覚的に区別する。
+   ---------------------------------------------------------- */
+
+.notify-today-btn {
+    flex-shrink: 0;                     /* タブが多くても縮まない */
+    white-space: nowrap;
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    border: 1px solid var(--color-success);
+    border-radius: 20px;                /* タブと同じピル形 */
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.notify-today-btn:hover {
+    background-color: var(--color-success);
+    color: #fff;
+    text-decoration: none;
 }

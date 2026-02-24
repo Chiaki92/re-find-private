@@ -1,0 +1,99 @@
+{# ==========================================================
+   Re:find — notify_list.html 通知一覧ページ
+
+   ■ この画面の役割：
+     - LINEの通知メッセージ末尾のURLから遷移する
+     - 指定日に通知したアイテムをタイルカードで一覧表示
+     - 読み取り専用（編集モーダルなし）
+
+   ■ Flask から渡されるデータ：
+     - items      : 通知対象アイテム一覧 [{ id, title, type, status, ... }, ...]
+     - date_str   : 表示日付（YYYY-MM-DD）
+     - item_count : アイテム件数
+
+   ■ 読み込むCSS：
+     - css/index.css : カードグリッド、空の状態のスタイルを再利用
+   ========================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}通知一覧 - {{ date_str }} - Re:find{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+{% endblock %}
+
+{% block content %}
+
+{# ===== ページヘッダー ===== #}
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 0 8px;">
+    <a href="/" style="color: var(--color-text-muted); font-size: 20px; text-decoration: none;">
+        <i class="bi bi-arrow-left"></i>
+    </a>
+    <div>
+        <div style="font-size: 16px; font-weight: 700; color: var(--color-text);">
+            通知一覧
+        </div>
+        <div style="font-size: 12px; color: var(--color-text-muted);">
+            {{ date_str }} / {{ item_count }}件
+        </div>
+    </div>
+</div>
+
+{# ===== アイテムグリッド（index.css の .item-grid を再利用） ===== #}
+<div class="item-grid">
+
+    {# ----- 空の状態 ----- #}
+    {% if item_count == 0 %}
+    <div class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <div class="empty-state-text">この日の通知はありません</div>
+        <div class="empty-state-hint">
+            <a href="/" style="color: var(--color-primary);">一覧に戻る</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% for item in items %}
+    {# ----- 個別のカード（index.html と同じ構造） ----- #}
+    <div class="item-card"
+         data-status="{{ item.status }}">
+
+        {# --- サムネイル部分 --- #}
+        <div class="item-card-thumb">
+            {% if item.type == 'image' and item.image_url %}
+            <img src="{{ item.image_url }}" alt="">
+            {% elif item.type == 'url' and item.ogp_image %}
+            <img src="{{ item.ogp_image }}" alt="">
+            {% else %}
+            <div class="item-card-icon">
+                {% if item.type == 'image' %}📷
+                {% elif item.type == 'url' %}🔗
+                {% else %}📝
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {# --- カード情報部分 --- #}
+        <div class="item-card-body">
+            <div class="item-card-title">{{ item.title or '（タイトルなし）' }}</div>
+            <span class="item-card-category badge-category">{{ item.category_name or '未分類' }}</span>
+            {% if item.status != 'done' and item.status != 'archived' %}
+            <div class="item-card-notify-info">
+                <span class="badge-notify-count">通知 {{ item.notify_count or 0 }}/6回</span>
+            </div>
+            {% endif %}
+            <span class="item-card-date">{{ item.created_at | timeago }}</span>
+        </div>
+
+        {# --- 対応済みバッジ --- #}
+        {% if item.status == 'done' %}
+        <div class="item-card-done-badge">✓ 対応済み</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+</div>
+
+{% endblock %}
