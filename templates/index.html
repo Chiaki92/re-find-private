@@ -132,6 +132,14 @@
         <div class="item-card-body">
             <div class="item-card-title">{{ item.title or '（タイトルなし）' }}</div>
             <span class="item-card-category badge-category">{{ item.category_name or '未分類' }}</span>
+            {% if item.status != 'done' and item.status != 'archived' %}
+            <div class="item-card-notify-info">
+                <span class="badge-notify-count">通知 {{ item.notify_count or 0 }}/6回</span>
+                {% if item.next_notify_at %}
+                <span class="badge-next-notify">次回 {{ item.next_notify_at | timeuntil }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
             <span class="item-card-date">{{ item.created_at | timeago }}</span>
         </div>
 

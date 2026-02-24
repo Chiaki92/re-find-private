@@ -255,6 +255,33 @@
     /* badge-category は common.css で定義済み */
 }
 
+/* 通知情報（回数＋次回） */
+.item-card-notify-info {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.badge-notify-count,
+.badge-next-notify {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.badge-notify-count {
+    background: #E8F4E8;
+    color: #4A7A4A;
+}
+
+.badge-next-notify {
+    background: #E8EEF4;
+    color: #4A6A8A;
+}
+
 /* 保存日 */
 .item-card-date {
     display: block;

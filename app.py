@@ -79,6 +79,31 @@ def timeago_filter(value):
         return f"{days // 365}年前"
 
 
+@app.template_filter('timeuntil')
+def timeuntil_filter(value):
+    """未来の日時を「3日後」のような相対表示に変換する"""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    now = datetime.now(timezone.utc)
+    diff = value - now
+    days = diff.days
+
+    if days < 0:
+        return "まもなく"
+    elif days == 0:
+        return "今日"
+    elif days == 1:
+        return "明日"
+    elif days < 30:
+        return f"{days}日後"
+    elif days < 365:
+        return f"{days // 30}ヶ月後"
+    else:
+        return f"{days // 365}年後"
+
+
 @app.template_filter('dateformat')
 def dateformat_filter(value):
     """日時を「2026/02/20」形式（JST）に変換する"""
