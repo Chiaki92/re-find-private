@@ -106,5 +106,16 @@
 </div>
 {% endblock %}
 
-{# 共有ページにはJavaScript不要 #}
-{% block extra_js %}{% endblock %}
+{% block extra_js %}
+{% if item and item.original_url %}
+<script>
+document.querySelector('.shared-url')?.addEventListener('click', function() {
+    navigator.sendBeacon('/api/track-click', JSON.stringify({
+        item_id: '{{ item.id }}',
+        url: '{{ item.original_url }}',
+        line_user_id: '{{ item.line_user_id }}'
+    }));
+});
+</script>
+{% endif %}
+{% endblock %}

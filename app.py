@@ -11,7 +11,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from flask import Flask, request, session, redirect, render_template
+from flask import Flask, request, session, redirect, render_template, jsonify
+
+from activity_logger import log_activity
 
 load_dotenv()
 
@@ -239,6 +241,9 @@ def shared_item_page(token):
         cat = item_data.pop("categories", None)
         item_data["category_name"] = cat["name"] if cat else "未分類"
 
+        # 共有リンクアクセスを記録
+        log_activity(owner_id, "share_accessed", item_id=str(item_id), metadata={"token": token})
+
         # ログイン中ユーザーがアイテムのオーナーか判定
         current_user = session.get("line_user_id")
         is_owner = current_user is not None and current_user == owner_id
@@ -248,6 +253,21 @@ def shared_item_page(token):
     except Exception as e:
         app.logger.error(f"共有リンクエラー: {e}")
         return render_template("shared_item.html", item=None, is_owner=False)
+
+
+@app.route("/api/track-click", methods=["POST"])
+def track_click():
+    """共有ページでの元URLクリックを記録する"""
+    try:
+        data = request.get_json(silent=True) or {}
+        item_id = data.get("item_id")
+        url = data.get("url")
+        line_user_id = data.get("line_user_id")
+        if item_id:
+            log_activity(line_user_id, "url_clicked", item_id=str(item_id), metadata={"url": url})
+        return jsonify({"ok": True}), 200
+    except Exception:
+        return jsonify({"ok": True}), 200
 
 
 @app.route("/notify-list")
@@ -275,6 +295,9 @@ def notify_list():
 
     date_display = target_date.strftime("%Y-%m-%d")
     next_date_str = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # 通知一覧アクセスを記録
+    log_activity(line_user_id, "notify_list_viewed", metadata={"date": date_display})
 
     # ---- user_activity_logs から notification_sent を検索 ----
     items_list = []
