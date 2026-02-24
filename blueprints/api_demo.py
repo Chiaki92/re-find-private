@@ -2,8 +2,8 @@
 # デモ通知 API Blueprint（発表用・一時的）
 #
 # ■ このファイルの役割：
-#   - POST /api/demo/notify → ログインユーザーの pending アイテムを
-#     即座に LINE 通知する（next_notify_at を無視）
+#   - POST /api/demo/notify → ログインユーザーの pending アイテムのうち
+#     今日が通知日のものを即座に LINE 通知する
 #
 # ■ 発表後の削除手順：
 #   1. このファイルを削除
@@ -43,22 +43,28 @@ NOTIFY_DETAIL_LIMIT = 5
 @api_demo_bp.route("/api/demo/notify", methods=["POST"])
 @login_required
 def demo_notify():
-    """ログインユーザーの pending アイテムを即座に通知する"""
+    """ログインユーザーの今日が通知日の pending アイテムを即座に通知する"""
     line_user_id = get_current_user_line_id()
 
     try:
-        # 1. pending アイテムを取得（next_notify_at を無視）
+        # 1. 今日が通知日の pending アイテムを取得
+        now_jst = datetime.now(JST)
+        today_start = now_jst.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+
         res = supabase_admin.table("items") \
             .select("id, line_user_id, title, notify_count, next_notify_at, created_at, categories(name)") \
             .eq("line_user_id", line_user_id) \
             .eq("status", "pending") \
             .is_("deleted_at", "null") \
+            .gte("next_notify_at", today_start.isoformat()) \
+            .lt("next_notify_at", tomorrow_start.isoformat()) \
             .order("created_at", desc=True) \
             .execute()
 
         items = res.data or []
         if not items:
-            return {"ok": False, "error": "通知対象のアイテムがありません"}, 404
+            return {"ok": False, "error": "今日が通知日のアイテムがありません"}, 404
 
         # カテゴリ名を整形
         for item in items:
