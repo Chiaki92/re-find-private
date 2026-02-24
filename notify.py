@@ -222,7 +222,7 @@ def update_item(item, notify_time="21:00"):
         }).eq("id", item["id"]).execute()
     else:
         # ── 次回通知日時を計算（ユーザー設定時間を使用） ──
-        hour, minute = map(int, notify_time.split(":"))
+        hour, minute = map(int, notify_time.split(":")[:2])
         days = NOTIFY_INTERVALS.get(new_count, 60)
         next_at = (datetime.now(JST) + timedelta(days=days)).replace(
             hour=hour, minute=minute, second=0, microsecond=0
