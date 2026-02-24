@@ -214,14 +214,15 @@ def shared_item_page(token):
     """共有リンク閲覧ページ（ログイン不要）"""
     try:
         link = supabase_admin.table("shared_links") \
-            .select("item_id") \
+            .select("item_id, line_user_id") \
             .eq("token", token) \
             .execute()
 
         if not link.data:
-            return render_template("shared_item.html", item=None)
+            return render_template("shared_item.html", item=None, is_owner=False)
 
         item_id = link.data[0]["item_id"]
+        owner_id = link.data[0]["line_user_id"]
 
         item = supabase_admin.table("items") \
             .select("*, categories(name)") \
@@ -230,17 +231,21 @@ def shared_item_page(token):
             .execute()
 
         if not item.data:
-            return render_template("shared_item.html", item=None)
+            return render_template("shared_item.html", item=None, is_owner=False)
 
         item_data = item.data[0]
         cat = item_data.pop("categories", None)
         item_data["category_name"] = cat["name"] if cat else "未分類"
 
-        return render_template("shared_item.html", item=item_data)
+        # ログイン中ユーザーがアイテムのオーナーか判定
+        current_user = session.get("line_user_id")
+        is_owner = current_user is not None and current_user == owner_id
+
+        return render_template("shared_item.html", item=item_data, is_owner=is_owner)
 
     except Exception as e:
         app.logger.error(f"共有リンクエラー: {e}")
-        return render_template("shared_item.html", item=None)
+        return render_template("shared_item.html", item=None, is_owner=False)
 
 
 @app.route("/notify-list")

@@ -78,11 +78,19 @@
         </div>
     </div>
 
-    <!-- Re:find 宣伝 -->
+    {% if is_owner %}
+    <!-- オーナー向けナビゲーション -->
+    <div class="shared-owner-nav">
+        <a href="/?openExternalBrowser=1" class="shared-nav-link">📋 一覧に戻る</a>
+        <a href="/?openExternalBrowser=1#cat-{{ item.category_name }}" class="shared-nav-link">📁 「{{ item.category_name }}」を見る</a>
+    </div>
+    {% else %}
+    <!-- 非ユーザー向け宣伝 -->
     <p class="shared-promo">
         このアイテムは共有リンクで閲覧しています<br>
         <a href="/">Re:find で自分の情報も管理してみませんか？</a>
     </p>
+    {% endif %}
 
     {% else %}
     <!-- ===== リンクが無効な場合 ===== -->
