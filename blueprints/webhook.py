@@ -156,7 +156,8 @@ def handle_text_message(event):
             .eq("line_user_id", user_id) \
             .execute()
         notify_time = user_settings.data[0].get("notify_time", "21:00") if user_settings.data else "21:00"
-        nt_hour, nt_minute = map(int, notify_time.split(":"))
+        parts = notify_time.split(":")
+        nt_hour, nt_minute = int(parts[0]), int(parts[1])
         first_notify_at = (datetime.now(JST) + timedelta(days=1)).replace(
             hour=nt_hour, minute=nt_minute, second=0, microsecond=0
         )
@@ -301,7 +302,8 @@ def handle_image_message(event):
             .eq("line_user_id", user_id) \
             .execute()
         notify_time = user_settings.data[0].get("notify_time", "21:00") if user_settings.data else "21:00"
-        nt_hour, nt_minute = map(int, notify_time.split(":"))
+        parts = notify_time.split(":")
+        nt_hour, nt_minute = int(parts[0]), int(parts[1])
         first_notify_at = (datetime.now(JST) + timedelta(days=1)).replace(
             hour=nt_hour, minute=nt_minute, second=0, microsecond=0
         )
