@@ -18,11 +18,14 @@ from linebot.v3.webhooks import (
 )
 from linebot.v3.exceptions import InvalidSignatureError
 
+import os
 from extensions import supabase_admin, line_configuration, line_handler, JST
 from ai_classifier import classify_text, classify_image
 from storage_handler import upload_image
 from ogp_fetcher import fetch_ogp
 from activity_logger import log_activity
+
+BASE_URL = os.environ.get("RENDER_EXTERNAL_URL", "https://re-find.onrender.com")
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,21 @@ def is_url(text):
     url_pattern = r'https?://[^\s]+'
     match = re.search(url_pattern, text)
     return match.group() if match else None
+
+
+def create_share_link(item_id, user_id):
+    """アイテムの共有リンクを生成して返す"""
+    token = str(uuid.uuid4()).replace("-", "")[:16]
+    try:
+        supabase_admin.table("shared_links").insert({
+            "line_user_id": user_id,
+            "item_id": item_id,
+            "token": token,
+        }).execute()
+        return f"{BASE_URL}/share/{token}?openExternalBrowser=1"
+    except Exception as e:
+        logger.error(f"[handler] share link creation failed: {e}")
+        return None
 
 
 # ============================================
@@ -192,6 +210,9 @@ def handle_text_message(event):
         if getattr(insert_res, "error", None):
             logger.error(f"[supabase] insert item error: {insert_res.error}")
 
+        # 保存したアイテムのIDを取得
+        item_id = insert_res.data[0]["id"] if insert_res.data else None
+
         # カテゴリ内の件数を取得
         item_count = 0
         if category_id:
@@ -209,6 +230,12 @@ def handle_text_message(event):
             reply_text = f"🔗 「{category_name}」に保存しました！{count_label}\nタイトル: {title}\n🌐 {url}"
         else:
             reply_text = f"📝 「{category_name}」に保存しました！{count_label}\nタイトル: {title}"
+
+        # 共有リンクを追加
+        if item_id:
+            share_url = create_share_link(item_id, user_id)
+            if share_url:
+                reply_text += f"\n\n📎 詳細: {share_url}"
 
         msg_type = "url" if url else "text"
         log_activity(user_id, "bot_message", metadata={"message_type": msg_type})
@@ -338,6 +365,11 @@ def handle_image_message(event):
 
         count_label = f"（{item_count}件目）" if item_count else ""
         reply_text = f"📷 「{category_name}」に保存しました！{count_label}\nタイトル: {title}"
+
+        # 共有リンクを追加
+        share_url = create_share_link(item_id, user_id)
+        if share_url:
+            reply_text += f"\n\n📎 詳細: {share_url}"
 
         log_activity(user_id, "bot_message", metadata={"message_type": "image"})
 
