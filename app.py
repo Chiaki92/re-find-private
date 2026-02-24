@@ -136,12 +136,14 @@ from blueprints.api_items import api_items_bp
 from blueprints.api_categories import api_categories_bp
 from blueprints.api_settings import api_settings_bp
 from blueprints.webhook import webhook_bp
+from blueprints.api_demo import api_demo_bp  # デモ通知（発表後に削除）
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(api_items_bp)
 app.register_blueprint(api_categories_bp)
 app.register_blueprint(api_settings_bp)
 app.register_blueprint(webhook_bp)
+app.register_blueprint(api_demo_bp)  # デモ通知（発表後に削除）
 
 # ============================================
 # ルート（app.py に残すもの）
