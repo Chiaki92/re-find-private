@@ -181,6 +181,22 @@ input, select, textarea {
     color: var(--color-primary-dark);
 }
 
+/* 設定ボタン（歯車アイコン） */
+.btn-settings {
+    color: var(--color-text-muted);
+    font-size: 18px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+}
+.btn-settings:hover {
+    color: var(--color-primary);
+    background-color: var(--color-primary-light);
+    text-decoration: none;
+}
+
 /* ログアウトボタン */
 .btn-logout {
     background-color: transparent;

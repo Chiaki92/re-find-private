@@ -1,7 +1,8 @@
 """
 notify.py — re-find 通知バッチ
-GitHub Actions で毎日 UTC 12:00（JST 21:00）に実行。
+GitHub Actions で30分ごとに実行。
 忘却曲線ベースの間隔で LINE Push Message を送信する。
+各ユーザーの user_settings.notify_time に合わせて通知を送る。
 """
 
 import os
@@ -193,11 +194,11 @@ def build_message(items):
 
 
 # ── アイテムの更新（notify_count・次回通知日時） ───
-def update_item(item):
+def update_item(item, notify_time="21:00"):
     """
     送信成功後に呼び出す。
     - notify_count を +1
-    - NOTIFY_INTERVALS に従って次回 next_notify_at を設定（21:00 JST 固定）
+    - NOTIFY_INTERVALS に従って次回 next_notify_at を設定（ユーザー設定時間）
     - MAX_NOTIFY_COUNT に達したら status='archived', next_notify_at=NULL
     """
     new_count = item["notify_count"] + 1
@@ -211,10 +212,11 @@ def update_item(item):
             "updated_at": datetime.now(JST).isoformat(),
         }).eq("id", item["id"]).execute()
     else:
-        # ── 次回通知日時を計算（JST 21:00 に固定） ──
+        # ── 次回通知日時を計算（ユーザー設定時間を使用） ──
+        hour, minute = map(int, notify_time.split(":"))
         days = NOTIFY_INTERVALS.get(new_count, 60)
         next_at = (datetime.now(JST) + timedelta(days=days)).replace(
-            hour=21, minute=0, second=0, microsecond=0
+            hour=hour, minute=minute, second=0, microsecond=0
         )
         supabase.table("items").update({
             "notify_count": new_count,
@@ -265,16 +267,18 @@ def main():
 
     for line_user_id, user_items in grouped.items():
 
-        # 3. user_settings で通知が無効なユーザーはスキップ
+        # 3. user_settings で通知が無効なユーザーはスキップ、notify_time を取得
         settings = (
             supabase.table("user_settings")
-            .select("notify_enabled")
+            .select("notify_enabled, notify_time")
             .eq("line_user_id", line_user_id)
             .execute()
         )
         if settings.data and not settings.data[0].get("notify_enabled", True):
             log.info(f"通知OFF: {line_user_id}")
             continue
+
+        notify_time = settings.data[0].get("notify_time", "21:00") if settings.data else "21:00"
 
         # 4. 共有リンクを取得/生成してアイテムに付与
         for item in user_items:
@@ -305,7 +309,7 @@ def main():
 
         # 6. 送信成功 → notify_count と next_notify_at を更新
         for item in user_items:
-            update_item(item)
+            update_item(item, notify_time)
 
         # 7. 通知ログを記録
         item_ids = [i["id"] for i in user_items]

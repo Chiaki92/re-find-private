@@ -109,11 +109,13 @@ if DEV_MODE:
 from blueprints.auth import auth_bp
 from blueprints.api_items import api_items_bp
 from blueprints.api_categories import api_categories_bp
+from blueprints.api_settings import api_settings_bp
 from blueprints.webhook import webhook_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(api_items_bp)
 app.register_blueprint(api_categories_bp)
+app.register_blueprint(api_settings_bp)
 app.register_blueprint(webhook_bp)
 
 # ============================================
@@ -159,6 +161,22 @@ def index():
         items=items_list,
         items_json=json.dumps(items_list, default=str),
     )
+
+
+@app.route("/settings")
+@login_required
+def settings_page():
+    """通知設定画面"""
+    line_user_id = get_current_user_line_id()
+
+    res = supabase_admin.table("user_settings") \
+        .select("notify_time, notify_enabled") \
+        .eq("line_user_id", line_user_id) \
+        .execute()
+
+    settings = res.data[0] if res.data else {"notify_time": "21:00", "notify_enabled": True}
+
+    return render_template("settings.html", settings=settings)
 
 
 @app.route("/share/<token>")

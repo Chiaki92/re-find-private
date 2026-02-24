@@ -129,9 +129,15 @@ def handle_text_message(event):
                 category_id = new_cat.data[0]["id"]
                 logger.info(f"[カテゴリ作成] {category_name} (id={category_id})")
 
-        # ④ items に保存（明日21時に通知）
-        tomorrow_9pm = (datetime.now(JST) + timedelta(days=1)).replace(
-            hour=21, minute=0, second=0, microsecond=0
+        # ④ items に保存（ユーザー設定の通知時間で翌日通知）
+        user_settings = supabase_admin.table("user_settings") \
+            .select("notify_time") \
+            .eq("line_user_id", user_id) \
+            .execute()
+        notify_time = user_settings.data[0].get("notify_time", "21:00") if user_settings.data else "21:00"
+        nt_hour, nt_minute = map(int, notify_time.split(":"))
+        first_notify_at = (datetime.now(JST) + timedelta(days=1)).replace(
+            hour=nt_hour, minute=nt_minute, second=0, microsecond=0
         )
 
         if url:
@@ -143,7 +149,7 @@ def handle_text_message(event):
                 "description": ogp["description"],
                 "ogp_image": ogp["image"],
                 "status": "pending",
-                "next_notify_at": tomorrow_9pm.isoformat(),
+                "next_notify_at": first_notify_at.isoformat(),
             }
         else:
             item_data = {
@@ -152,7 +158,7 @@ def handle_text_message(event):
                 "title": title,
                 "description": text,
                 "status": "pending",
-                "next_notify_at": tomorrow_9pm.isoformat(),
+                "next_notify_at": first_notify_at.isoformat(),
             }
 
         if category_id:
@@ -253,9 +259,15 @@ def handle_image_message(event):
                 category_id = new_cat.data[0]["id"]
                 logger.info(f"[カテゴリ作成] {category_name} (id={category_id})")
 
-        # ⑦ items に保存
-        tomorrow_9pm = (datetime.now(JST) + timedelta(days=1)).replace(
-            hour=21, minute=0, second=0, microsecond=0
+        # ⑦ items に保存（ユーザー設定の通知時間で翌日通知）
+        user_settings = supabase_admin.table("user_settings") \
+            .select("notify_time") \
+            .eq("line_user_id", user_id) \
+            .execute()
+        notify_time = user_settings.data[0].get("notify_time", "21:00") if user_settings.data else "21:00"
+        nt_hour, nt_minute = map(int, notify_time.split(":"))
+        first_notify_at = (datetime.now(JST) + timedelta(days=1)).replace(
+            hour=nt_hour, minute=nt_minute, second=0, microsecond=0
         )
 
         item_data = {
@@ -265,7 +277,7 @@ def handle_image_message(event):
             "title": title,
             "image_url": image_url,
             "status": "pending",
-            "next_notify_at": tomorrow_9pm.isoformat(),
+            "next_notify_at": first_notify_at.isoformat(),
         }
         if category_id:
             item_data["category_id"] = category_id

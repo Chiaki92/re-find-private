@@ -1,0 +1,190 @@
+/* ==========================================================
+   Re:find — settings.css
+   通知設定画面専用のスタイル
+
+   ■ このファイルの構成：
+     1. ページタイトル
+     2. 設定セクション（カード風のブロック）
+     3. セレクトボックス（通知時間選択用）
+     4. トグルスイッチ（通知ON/OFF用）
+     5. 保存ボタン
+     6. 一覧に戻るリンク
+   ========================================================== */
+
+
+/* ----------------------------------------------------------
+   1. ページタイトル
+
+   categories.css と同じサイズ・余白に統一。
+   ---------------------------------------------------------- */
+.settings-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 24px;
+    padding-top: 16px;
+}
+
+
+/* ----------------------------------------------------------
+   2. 設定セクション
+
+   各設定項目をカード風のブロックで囲む。
+   category-item と同じ見た目（角丸・影・背景色）に合わせている。
+   ---------------------------------------------------------- */
+.settings-section {
+    background-color: var(--color-card);
+    border: 1px solid var(--color-card-border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--card-shadow);
+}
+
+/* セクション内のラベル（アイコン + テキスト） */
+.settings-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* セクション内の説明文（ラベルの下に表示） */
+.settings-description {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin: 4px 0 12px;
+}
+
+
+/* ----------------------------------------------------------
+   3. セレクトボックス（通知時間選択用）
+
+   デフォルトの <select> のデザインを上書き。
+   appearance: none で OS デフォルトの矢印を消し、
+   SVG の三角アイコンを右端に配置している。
+   ---------------------------------------------------------- */
+.settings-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-input-border);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: var(--font-body);
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    outline: none;
+    appearance: none;                /* OS デフォルトの矢印を非表示 */
+    /* ▼ カスタム矢印アイコン（SVG をインラインで埋め込み） */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239B8E80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+
+/* ----------------------------------------------------------
+   4. トグルスイッチ（通知ON/OFF用）
+
+   ■ 構造（settings.html）：
+     <label class="toggle-switch">
+       <input type="checkbox">    ← 実際の ON/OFF 状態を持つ（非表示）
+       <span class="toggle-slider"> ← 見た目のスイッチ
+     </label>
+
+   ■ 仕組み：
+     checkbox を opacity: 0 で非表示にし、
+     :checked 疑似クラスで slider の色とつまみの位置を切り替える。
+   ---------------------------------------------------------- */
+
+/* ON/OFF ラベルとスイッチを横並びにする行 */
+.settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* 「ON」「OFF」のテキスト（JS で動的に更新される） */
+.settings-toggle-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+/* スイッチ全体のサイズ */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+}
+
+/* 実際の checkbox は非表示（スイッチの見た目で代替） */
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* スイッチの背景（トラック部分） */
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--color-border);   /* OFF 時：グレー */
+    border-radius: 28px;
+    transition: background-color 0.3s;
+}
+
+/* スイッチのつまみ（丸い部分） */
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    height: 22px;
+    width: 22px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.3s;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* ON 時：背景をコーラルに変更 */
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--color-primary);
+}
+
+/* ON 時：つまみを右に移動（22px = スイッチ幅50 - つまみ幅22 - 左右余白6） */
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(22px);
+}
+
+
+/* ----------------------------------------------------------
+   5. 保存ボタン
+
+   btn-refind-primary（common.css）のスタイルを継承し、
+   横幅を100%に広げている。
+   ---------------------------------------------------------- */
+.settings-save-btn {
+    width: 100%;
+    margin-top: 8px;
+}
+
+
+/* ----------------------------------------------------------
+   6. 一覧に戻るリンク
+
+   categories.css の .categories-back と同じスタイル。
+   ---------------------------------------------------------- */
+.settings-back {
+    display: block;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--color-primary);
+}

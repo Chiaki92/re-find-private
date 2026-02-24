@@ -1,0 +1,87 @@
+{# ==========================================================
+   Re:find — settings.html
+   通知設定画面
+
+   ■ この画面の役割：
+     - 通知時間の変更（30分刻み）
+     - 通知の ON/OFF 切り替え
+
+   ■ Flask から渡されるデータ：
+     - settings : { notify_time, notify_enabled }
+   ========================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Re:find - 通知設定{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<h2 class="settings-title">通知設定</h2>
+
+<!-- ===== 通知時間 ===== -->
+<div class="settings-section">
+    <label class="settings-label" for="notify-time">
+        <i class="bi bi-clock"></i> 通知時間
+    </label>
+    <p class="settings-description">
+        毎日この時間にリマインド通知が届きます
+    </p>
+    {# ===== 時間セレクトボックス =====
+         7:00〜23:30 を30分刻みで生成する。
+         各時間で :00 と :30 の2つの <option> を出力。
+         value は "07:00" のようにゼロ埋め2桁（DB保存用）、
+         表示テキストは "7:00" のようにゼロ埋めなし（読みやすさ重視）。
+         settings.notify_time と一致する option に selected を付与。 #}
+    <select id="notify-time" class="settings-select">
+        {% for h in range(7, 24) %}
+        <option value="{{ '%02d:00' % h }}"
+                {% if settings.notify_time == '%02d:00' % h %}selected{% endif %}>
+            {{ '%d:00' % h }}
+        </option>
+        <option value="{{ '%02d:30' % h }}"
+                {% if settings.notify_time == '%02d:30' % h %}selected{% endif %}>
+            {{ '%d:30' % h }}
+        </option>
+        {% endfor %}
+    </select>
+</div>
+
+<!-- ===== 通知 ON/OFF ===== -->
+<div class="settings-section">
+    <label class="settings-label">
+        <i class="bi bi-bell"></i> 通知
+    </label>
+    <p class="settings-description">
+        OFFにするとリマインド通知が届かなくなります
+    </p>
+    <div class="settings-toggle-row">
+        <span class="settings-toggle-label" id="toggle-label">
+            {{ "ON" if settings.notify_enabled else "OFF" }}
+        </span>
+        <label class="toggle-switch">
+            <input type="checkbox" id="notify-enabled"
+                   {% if settings.notify_enabled %}checked{% endif %}>
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
+</div>
+
+<!-- ===== 保存ボタン ===== -->
+<button id="save-settings-btn" class="btn-refind-primary settings-save-btn">
+    保存する
+</button>
+
+<!-- 一覧に戻る -->
+<a href="/" class="settings-back">
+    <i class="bi bi-arrow-left"></i> 一覧に戻る
+</a>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}
