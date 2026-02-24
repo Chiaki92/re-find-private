@@ -170,6 +170,7 @@ def handle_text_message(event):
                 "description": ogp["description"],
                 "ogp_image": ogp["image"],
                 "status": "pending",
+                "notify_count": 0,
                 "next_notify_at": first_notify_at.isoformat(),
             }
         else:
@@ -179,6 +180,7 @@ def handle_text_message(event):
                 "title": title,
                 "description": text,
                 "status": "pending",
+                "notify_count": 0,
                 "next_notify_at": first_notify_at.isoformat(),
             }
 
@@ -311,6 +313,7 @@ def handle_image_message(event):
             "title": title,
             "image_url": image_url,
             "status": "pending",
+            "notify_count": 0,
             "next_notify_at": first_notify_at.isoformat(),
         }
         if category_id:
