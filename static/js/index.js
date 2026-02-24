@@ -1,11 +1,13 @@
 /* ==========================================================
    Re:find — index.js
    一覧画面のJavaScript
-   
+
    ■ このファイルの役割：
      1. カテゴリタブのフィルタリング処理
-     2. カードクリック → モーダルを開く（modal.js の関数を呼ぶ）
-   
+     2. キーワード検索のフィルタリング処理
+     3. ソート（並び替え）処理
+     4. カードクリック → モーダルを開く（modal.js の関数を呼ぶ）
+
    ■ 前提：
      - common.js が先に読み込まれていること
      - modal.js が後に読み込まれること
@@ -15,78 +17,159 @@
 document.addEventListener('DOMContentLoaded', function() {
 
     /* ----------------------------------------------------------
-       1. カテゴリフィルタの処理
-       
-       タブをクリックすると、そのカテゴリのアイテムだけ表示する。
-       「すべて」タブを押すと全アイテムを表示する。
+       0. 要素の取得
        ---------------------------------------------------------- */
 
-    // すべてのタブボタンを取得
-    const tabs = document.querySelectorAll('.category-tab');
-    
-    // すべてのカードを取得
-    const cards = document.querySelectorAll('.item-card');
+    var tabs = document.querySelectorAll('.category-tab');
+    var cards = document.querySelectorAll('.item-card');
+    var itemGrid = document.querySelector('.item-grid');
+    var searchInput = document.getElementById('search-input');
+    var sortSelect = document.getElementById('sort-select');
 
-    // 各タブにクリックイベントを設定
+    // 現在のフィルタ状態を保持する変数
+    var currentCategory = 'all';      // 選択中のカテゴリ（'all' = すべて）
+    var currentSearchQuery = '';       // 検索クエリ（小文字化済み）
+
+
+    /* ----------------------------------------------------------
+       1. カテゴリタブのクリック処理
+       ---------------------------------------------------------- */
+
     tabs.forEach(function(tab) {
         tab.addEventListener('click', function() {
-
-            // --- アクティブタブの切り替え ---
-            // まず全タブから active を外す
+            // アクティブタブの切り替え
             tabs.forEach(function(t) {
                 t.classList.remove('active');
             });
-            // クリックされたタブに active を付ける
             this.classList.add('active');
 
-            // --- カードのフィルタリング ---
-            // data-category 属性からカテゴリIDを取得
-            const selectedCategory = this.getAttribute('data-category');
+            // 現在のカテゴリを更新
+            currentCategory = this.getAttribute('data-category');
 
-            cards.forEach(function(card) {
-                // カードの data-category-id を取得
-                const cardCategory = card.getAttribute('data-category-id');
-
-                if (selectedCategory === 'all') {
-                    // 「すべて」が選ばれた → 全カード表示
-                    card.style.display = '';
-                } else if (cardCategory === selectedCategory) {
-                    // カテゴリが一致 → 表示
-                    card.style.display = '';
-                } else {
-                    // カテゴリが不一致 → 非表示
-                    card.style.display = 'none';
-                }
-            });
-
-            // --- 空の状態の表示切り替え ---
-            // フィルタ後に表示されているカードが0枚なら「空の状態」を表示
-            updateEmptyState();
+            // フィルタ＆ソートを再適用
+            applyFiltersAndSort();
         });
     });
 
 
     /* ----------------------------------------------------------
-       2. カードクリック → モーダルを開く
-       
-       各カードをクリックすると、そのアイテムの詳細を
-       編集モーダルに表示する。
-       実際のモーダル開閉処理は modal.js の openModal() で行う。
+       2. 検索ボックスの入力処理
+
+       input イベントで1文字ごとにフィルタする（リアルタイム検索）。
+       DOM操作のみでAPIコールなし、カード数も限定的なのでデバウンス不要。
+       ---------------------------------------------------------- */
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            currentSearchQuery = this.value.trim().toLowerCase();
+            applyFiltersAndSort();
+        });
+    }
+
+
+    /* ----------------------------------------------------------
+       3. ソートドロップダウンの変更処理
+       ---------------------------------------------------------- */
+
+    if (sortSelect) {
+        sortSelect.addEventListener('change', function() {
+            applyFiltersAndSort();
+        });
+    }
+
+
+    /* ----------------------------------------------------------
+       4. フィルタ＆ソートの統合処理（中核ロジック）
+
+       カテゴリフィルタ、検索フィルタ、ソートの3つを
+       まとめて処理する。どのコントロールが変更されても
+       この関数が呼ばれる。
+       ---------------------------------------------------------- */
+
+    function applyFiltersAndSort() {
+
+        // --- Step A: フィルタリング ---
+        cards.forEach(function(card) {
+            var cardCategory = card.getAttribute('data-category-id');
+            var cardTitle = (card.getAttribute('data-title') || '').toLowerCase();
+
+            // カテゴリ条件：「すべて」なら常にtrue
+            var matchesCategory =
+                currentCategory === 'all' || cardCategory === currentCategory;
+
+            // 検索条件：クエリが空なら常にtrue
+            var matchesSearch =
+                currentSearchQuery === '' || cardTitle.indexOf(currentSearchQuery) !== -1;
+
+            // 両方の条件を満たすカードだけ表示
+            card.style.display = (matchesCategory && matchesSearch) ? '' : 'none';
+        });
+
+        // --- Step B: ソート ---
+        var sortKey = sortSelect ? sortSelect.value : 'newest';
+        var cardArray = Array.from(cards);
+
+        cardArray.sort(function(a, b) {
+            switch (sortKey) {
+                case 'newest':
+                    return compareDates(b, a);
+
+                case 'oldest':
+                    return compareDates(a, b);
+
+                case 'category':
+                    var catA = a.getAttribute('data-category-name') || '';
+                    var catB = b.getAttribute('data-category-name') || '';
+                    var catCompare = catA.localeCompare(catB, 'ja');
+                    if (catCompare !== 0) return catCompare;
+                    return compareDates(b, a);  // 同カテゴリ内は新しい順
+
+                case 'title':
+                    var titleA = a.getAttribute('data-title') || '';
+                    var titleB = b.getAttribute('data-title') || '';
+                    return titleA.localeCompare(titleB, 'ja');
+
+                default:
+                    return 0;
+            }
+        });
+
+        // ソート順でDOMに再配置
+        cardArray.forEach(function(card) {
+            itemGrid.appendChild(card);
+        });
+
+        // --- Step C: 空の状態を更新 ---
+        updateEmptyState();
+    }
+
+
+    /**
+     * 2つのカードのcreated_at日時を比較するヘルパー
+     * ISO 8601 文字列は辞書順で比較可能
+     */
+    function compareDates(a, b) {
+        var dateA = a.getAttribute('data-created-at') || '';
+        var dateB = b.getAttribute('data-created-at') || '';
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+    }
+
+
+    /* ----------------------------------------------------------
+       5. カードクリック → モーダルを開く
        ---------------------------------------------------------- */
 
     cards.forEach(function(card) {
         card.addEventListener('click', function() {
-            // カードの data-item-id からアイテムIDを取得
-            const itemId = this.getAttribute('data-item-id');
+            var itemId = this.getAttribute('data-item-id');
 
-            // ITEMS_DATA（Flask から渡されたJSON）からアイテム情報を探す
-            const item = ITEMS_DATA.find(function(i) {
+            var item = ITEMS_DATA.find(function(i) {
                 return String(i.id) === String(itemId);
             });
 
             if (item) {
-                // modal.js の openModal() を呼ぶ
-                // （modal.js がこの後に読み込まれるので、関数は存在する）
                 openModal(item);
             }
         });
@@ -94,7 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     /* ----------------------------------------------------------
-       3. ヘルパー関数
+       6. ヘルパー関数
        ---------------------------------------------------------- */
 
     /**
@@ -102,18 +185,16 @@ document.addEventListener('DOMContentLoaded', function() {
      * 空の状態メッセージの表示/非表示を切り替える
      */
     function updateEmptyState() {
-        const emptyState = document.querySelector('.empty-state');
-        if (!emptyState) return;  // 空の状態がHTML上にない場合はスキップ
+        var emptyState = document.querySelector('.empty-state');
+        if (!emptyState) return;
 
-        // 表示されている（display: none でない）カードを数える
-        let visibleCount = 0;
+        var visibleCount = 0;
         cards.forEach(function(card) {
             if (card.style.display !== 'none') {
                 visibleCount++;
             }
         });
 
-        // 0枚なら空の状態を表示、1枚以上なら非表示
         emptyState.style.display = visibleCount === 0 ? '' : 'none';
     }
 });

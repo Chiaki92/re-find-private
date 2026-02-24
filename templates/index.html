@@ -53,6 +53,26 @@
 </div>
 
 {# ----------------------------------------------------------
+   1.5. 検索 & ソートコントロール
+
+   検索ボックス（タイトルで絞り込み）とソートドロップダウンを
+   カテゴリタブとアイテム一覧の間に配置する。
+   フィルタ・ソート処理は index.js が担当。
+   ---------------------------------------------------------- #}
+<div class="search-sort-bar">
+    <div class="search-box">
+        <i class="bi bi-search search-box-icon"></i>
+        <input type="text" id="search-input" class="search-box-input" placeholder="タイトルで検索...">
+    </div>
+    <select id="sort-select" class="sort-select">
+        <option value="newest">新しい順</option>
+        <option value="oldest">古い順</option>
+        <option value="category">カテゴリ順</option>
+        <option value="title">タイトル順</option>
+    </select>
+</div>
+
+{# ----------------------------------------------------------
    2. アイテム一覧（タイルカード）
 
    CSS Grid で2列（スマホ）→ 3列（タブレット）→ 4列（PC）に並ぶ。
@@ -62,16 +82,19 @@
    ---------------------------------------------------------- #}
 <div class="item-grid">
 
-    {% if items | length == 0 %}
-    {# ----- 空の状態（アイテム0件） -----
-         grid-column: 1 / -1 でグリッド全幅を使う #}
-    <div class="empty-state">
+    {# ----- 空の状態 -----
+         アイテムが0件の場合、またはフィルタ後に表示カードが0枚の場合に表示。
+         JSの updateEmptyState() が表示/非表示を切り替える。 #}
+    <div class="empty-state" {% if items | length > 0 %}style="display: none;"{% endif %}>
         <div class="empty-state-icon">📭</div>
-        <div class="empty-state-text">まだアイテムがありません</div>
-        <div class="empty-state-hint">LINEで情報を送ってみましょう！</div>
+        <div class="empty-state-text">
+            {% if items | length == 0 %}まだアイテムがありません{% else %}一致するアイテムがありません{% endif %}
+        </div>
+        <div class="empty-state-hint">
+            {% if items | length == 0 %}LINEで情報を送ってみましょう！{% else %}検索条件やカテゴリを変えてみてください{% endif %}
+        </div>
     </div>
 
-    {% else %}
     {% for item in items %}
     {# ----- 個別のカード -----
          data-item-id       : index.js がクリック時にアイテムを特定するため
@@ -80,7 +103,10 @@
     <div class="item-card"
          data-item-id="{{ item.id }}"
          data-category-id="{{ item.category_id }}"
-         data-status="{{ item.status }}">
+         data-status="{{ item.status }}"
+         data-title="{{ item.title or '' }}"
+         data-category-name="{{ item.category_name or '未分類' }}"
+         data-created-at="{{ item.created_at or '' }}">
 
         {# --- サムネイル部分 ---
              画像タイプ → 保存された画像を表示
@@ -116,7 +142,6 @@
         {% endif %}
     </div>
     {% endfor %}
-    {% endif %}
 
 </div>
 

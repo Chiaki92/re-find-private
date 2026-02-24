@@ -74,6 +74,76 @@
 
 
 /* ----------------------------------------------------------
+   1.5. 検索 & ソートバー
+
+   検索ボックスとソートドロップダウンを横並びにする。
+   検索ボックスが伸びて残りスペースを使い、ソートは固定幅。
+   ---------------------------------------------------------- */
+
+.search-sort-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0 8px;
+}
+
+/* --- 検索ボックス --- */
+.search-box {
+    flex: 1;                        /* 残りスペースを全部使う */
+    position: relative;             /* アイコンの位置基準 */
+}
+
+.search-box-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    font-size: 14px;
+    pointer-events: none;           /* アイコンクリックは下のinputに通す */
+}
+
+.search-box-input {
+    width: 100%;
+    padding: 8px 12px 8px 36px;     /* 左に余白（アイコン分） */
+    border: 1px solid var(--color-input-border);
+    border-radius: 10px;
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-box-input::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+}
+
+/* --- ソートドロップダウン --- */
+.sort-select {
+    flex-shrink: 0;                 /* 縮まない */
+    padding: 8px 28px 8px 12px;     /* 右に余白（矢印分） */
+    border: 1px solid var(--color-input-border);
+    border-radius: 10px;
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    font-size: 13px;
+    font-family: var(--font-body);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    /* 矢印アイコンをCSSで追加 */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239B8E80' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+
+
+/* ----------------------------------------------------------
    2. タイルカード一覧（CSS Grid）
    
    カードを2列で並べる。タブレット以上では3列、PCでは4列。
