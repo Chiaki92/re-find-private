@@ -313,9 +313,18 @@ def notify_list():
     except Exception as e:
         app.logger.error(f"通知一覧取得エラー: {e}")
 
+    # ---- カテゴリ一覧を取得（モーダルで使用） ----
+    categories = supabase_admin.table("categories") \
+        .select("id, name") \
+        .eq("line_user_id", line_user_id) \
+        .order("created_at") \
+        .execute()
+
     return render_template(
         "notify_list.html",
         items=items_list,
+        items_json=json.dumps(items_list, default=str),
+        categories=categories.data,
         date_str=date_display,
         item_count=len(items_list),
     )

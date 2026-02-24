@@ -4,15 +4,18 @@
    ■ この画面の役割：
      - LINEの通知メッセージ末尾のURLから遷移する
      - 指定日に通知したアイテムをタイルカードで一覧表示
-     - 読み取り専用（編集モーダルなし）
+     - カードクリックで編集モーダルを表示（index.html と同じ）
 
    ■ Flask から渡されるデータ：
      - items      : 通知対象アイテム一覧 [{ id, title, type, status, ... }, ...]
+     - items_json : items の JSON（JS用）
+     - categories : カテゴリ一覧（モーダルのセレクト用）
      - date_str   : 表示日付（YYYY-MM-DD）
      - item_count : アイテム件数
 
-   ■ 読み込むCSS：
+   ■ 読み込むCSS/JS：
      - css/index.css : カードグリッド、空の状態のスタイルを再利用
+     - js/modal.js   : 編集モーダルの開閉・保存・削除処理
    ========================================================== #}
 
 {% extends "base.html" %}
@@ -69,6 +72,7 @@
     {% for item in items %}
     {# ----- 個別のカード（index.html と同じ構造） ----- #}
     <div class="item-card"
+         data-item-id="{{ item.id }}"
          data-status="{{ item.status }}"
          data-title="{{ item.title or '' }}"
          data-category-name="{{ item.category_name or '未分類' }}"
@@ -111,47 +115,99 @@
 
 </div>
 
+{# ===== 編集モーダル（index.html と同じ構造） ===== #}
+<div id="edit-modal" class="edit-modal-overlay" style="display: none;">
+    <div class="edit-modal-content">
+
+        <div class="edit-modal-header">
+            <button id="modal-done-btn" class="edit-modal-done-btn">✓ 対応済みにする</button>
+            <button id="modal-close-btn" class="edit-modal-close-btn">✕</button>
+        </div>
+
+        <div class="edit-modal-body">
+            <div id="modal-thumb" class="edit-modal-thumb"></div>
+
+            <label class="edit-modal-label">タイトル</label>
+            <input id="modal-title" type="text" class="edit-modal-input" placeholder="タイトルを入力">
+
+            <label class="edit-modal-label">カテゴリ</label>
+            <select id="modal-category" class="edit-modal-select">
+                <option value="">未分類</option>
+                {% for category in categories %}
+                <option value="{{ category.id }}">{{ category.name }}</option>
+                {% endfor %}
+            </select>
+
+            <label class="edit-modal-label">メモ</label>
+            <textarea id="modal-memo" class="edit-modal-textarea" rows="3" placeholder="メモを入力"></textarea>
+
+            <div id="modal-url-section" style="display: none;">
+                <label class="edit-modal-label">元のURL</label>
+                <a id="modal-url" class="edit-modal-url" href="#" target="_blank" rel="noopener"></a>
+            </div>
+
+            <div id="modal-date" class="edit-modal-date"></div>
+
+            <button id="modal-share-btn" class="edit-modal-share-btn">🔗 共有リンクを作成</button>
+        </div>
+
+        <div class="edit-modal-footer">
+            <button id="modal-delete-btn" class="edit-modal-delete-btn">削除</button>
+            <button id="modal-save-btn" class="edit-modal-save-btn">保存</button>
+        </div>
+
+    </div>
+</div>
+
 {% endblock %}
 
-{# ===== ソート用JavaScript ===== #}
+{# ===== ソート用JavaScript + カードクリック + モーダル ===== #}
 {% block extra_js %}
+<script>
+    const ITEMS_DATA = {{ items_json | safe }};
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var sortSelect = document.getElementById('sort-select');
     var itemGrid = document.querySelector('.item-grid');
-    if (!sortSelect || !itemGrid) return;
 
     var cards = document.querySelectorAll('.item-card');
 
-    sortSelect.addEventListener('change', function() {
-        var sortKey = this.value;
-        var cardArray = Array.from(cards);
+    /* --- ソート --- */
+    if (sortSelect && itemGrid) {
+        sortSelect.addEventListener('change', function() {
+            var sortKey = this.value;
+            var cardArray = Array.from(cards);
 
-        cardArray.sort(function(a, b) {
-            switch (sortKey) {
-                case 'newest':
-                    return compareDates(b, a);
-                case 'oldest':
-                    return compareDates(a, b);
-                case 'category':
-                    var catA = a.getAttribute('data-category-name') || '';
-                    var catB = b.getAttribute('data-category-name') || '';
-                    var catCompare = catA.localeCompare(catB, 'ja');
-                    if (catCompare !== 0) return catCompare;
-                    return compareDates(b, a);
-                case 'title':
-                    var titleA = a.getAttribute('data-title') || '';
-                    var titleB = b.getAttribute('data-title') || '';
-                    return titleA.localeCompare(titleB, 'ja');
-                default:
-                    return 0;
-            }
+            cardArray.sort(function(a, b) {
+                switch (sortKey) {
+                    case 'newest':
+                        return compareDates(b, a);
+                    case 'oldest':
+                        return compareDates(a, b);
+                    case 'category':
+                        var catA = a.getAttribute('data-category-name') || '';
+                        var catB = b.getAttribute('data-category-name') || '';
+                        var catCompare = catA.localeCompare(catB, 'ja');
+                        if (catCompare !== 0) return catCompare;
+                        return compareDates(b, a);
+                    case 'title':
+                        var titleA = a.getAttribute('data-title') || '';
+                        var titleB = b.getAttribute('data-title') || '';
+                        return titleA.localeCompare(titleB, 'ja');
+                    default:
+                        return 0;
+                }
+            });
+
+            cardArray.forEach(function(card) {
+                itemGrid.appendChild(card);
+            });
         });
 
-        cardArray.forEach(function(card) {
-            itemGrid.appendChild(card);
-        });
-    });
+        // 初期表示でカテゴリ順ソートを適用
+        sortSelect.dispatchEvent(new Event('change'));
+    }
 
     function compareDates(a, b) {
         var dateA = a.getAttribute('data-created-at') || '';
@@ -161,8 +217,19 @@ document.addEventListener('DOMContentLoaded', function() {
         return 0;
     }
 
-    // 初期表示でカテゴリ順ソートを適用
-    sortSelect.dispatchEvent(new Event('change'));
+    /* --- カードクリック → モーダルを開く --- */
+    cards.forEach(function(card) {
+        card.addEventListener('click', function() {
+            var itemId = this.getAttribute('data-item-id');
+            var item = ITEMS_DATA.find(function(i) {
+                return String(i.id) === String(itemId);
+            });
+            if (item) {
+                openModal(item);
+            }
+        });
+    });
 });
 </script>
+<script src="{{ url_for('static', filename='js/modal.js') }}"></script>
 {% endblock %}
