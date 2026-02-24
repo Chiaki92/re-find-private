@@ -86,13 +86,13 @@ def timeuntil_filter(value):
         return ""
     if isinstance(value, str):
         value = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    now = datetime.now(timezone.utc)
-    diff = value - now
-    days = diff.days
 
-    if days < 0:
-        return "まもなく"
-    elif days == 0:
+    JST = timezone(timedelta(hours=9))
+    today = datetime.now(JST).date()
+    target_date = value.astimezone(JST).date()
+    days = (target_date - today).days
+
+    if days <= 0:
         return "今日"
     elif days == 1:
         return "明日"
