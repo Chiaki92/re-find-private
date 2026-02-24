@@ -129,6 +129,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     var titleB = b.getAttribute('data-title') || '';
                     return titleA.localeCompare(titleB, 'ja');
 
+                case 'notify':
+                    var notifyA = a.getAttribute('data-next-notify-at') || '';
+                    var notifyB = b.getAttribute('data-next-notify-at') || '';
+                    // 通知日なし（done/archived）は末尾へ
+                    if (!notifyA && !notifyB) return compareDates(b, a);
+                    if (!notifyA) return 1;
+                    if (!notifyB) return -1;
+                    // 通知日が近い順（昇順）
+                    if (notifyA < notifyB) return -1;
+                    if (notifyA > notifyB) return 1;
+                    return compareDates(b, a);  // 同じ通知日なら新しい順
+
                 default:
                     return 0;
             }

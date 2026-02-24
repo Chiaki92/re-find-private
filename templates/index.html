@@ -71,6 +71,7 @@
         <option value="oldest">古い順</option>
         <option value="category">カテゴリ順</option>
         <option value="title">タイトル順</option>
+        <option value="notify">通知日順</option>
     </select>
 </div>
 
@@ -108,7 +109,8 @@
          data-status="{{ item.status }}"
          data-title="{{ item.title or '' }}"
          data-category-name="{{ item.category_name or '未分類' }}"
-         data-created-at="{{ item.created_at or '' }}">
+         data-created-at="{{ item.created_at or '' }}"
+         data-next-notify-at="{{ item.next_notify_at or '' }}">
 
         {# --- サムネイル部分 ---
              画像タイプ → 保存された画像を表示
