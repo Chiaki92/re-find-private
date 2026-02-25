@@ -135,6 +135,72 @@
 }
 
 
+/* ===== コピーセクション（ログイン中の別ユーザー向け） ===== */
+.shared-copy-section {
+    text-align: center;
+    margin-top: 24px;
+    padding: 20px 16px;
+    background-color: var(--color-card);
+    border-radius: 14px;
+    border: 1px solid var(--color-card-border);
+    box-shadow: var(--card-shadow);
+}
+
+.shared-copy-lead {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    line-height: 1.7;
+    margin: 0 0 16px;
+}
+
+.shared-copy-status {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 12px;
+}
+
+.shared-copy-btn {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.shared-copy-btn:active {
+    opacity: 0.7;
+}
+.shared-copy-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.shared-copy-btn--primary {
+    background-color: var(--color-primary);
+    color: #fff;
+    box-shadow: var(--color-primary-glow);
+}
+
+.shared-copy-btn--secondary {
+    background-color: var(--color-input-bg);
+    color: var(--color-primary);
+    border: 1px solid var(--color-border);
+}
+
+.shared-copy-list-link {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+
 /* ===== オーナー向けナビゲーション（ページ下部） ===== */
 .shared-owner-nav {
     display: flex;

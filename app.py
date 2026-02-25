@@ -270,11 +270,28 @@ def shared_item_page(token):
         # 共有リンクアクセスを記録
         log_activity(owner_id, "share_accessed", item_id=str(item_id), metadata={"token": token})
 
-        # ログイン中ユーザーがアイテムのオーナーか判定
+        # ログイン中ユーザーの状態を判定
         current_user = session.get("line_user_id")
         is_owner = current_user is not None and current_user == owner_id
+        is_logged_in = current_user is not None
 
-        return render_template("shared_item.html", item=item_data, is_owner=is_owner)
+        # ログイン中の別ユーザーの場合、コピー済みか判定
+        already_copied = False
+        if is_logged_in and not is_owner:
+            copy_check = supabase_admin.table("item_copies") \
+                .select("id") \
+                .eq("source_item_id", str(item_id)) \
+                .eq("copied_by", current_user) \
+                .limit(1) \
+                .execute()
+            already_copied = bool(copy_check.data)
+
+        return render_template("shared_item.html",
+            item=item_data,
+            is_owner=is_owner,
+            is_logged_in=is_logged_in,
+            already_copied=already_copied,
+        )
 
     except Exception as e:
         app.logger.error(f"共有リンクエラー: {e}")

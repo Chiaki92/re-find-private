@@ -79,13 +79,38 @@
     </div>
 
     {% if is_owner %}
-    <!-- オーナー向けナビゲーション -->
+    <!-- ① オーナー向けナビゲーション -->
     <div class="shared-owner-nav">
         <a href="/?openExternalBrowser=1" class="shared-nav-link">📋 一覧に戻る</a>
         <a href="/?openExternalBrowser=1#cat-{{ item.category_id }}" class="shared-nav-link">📁 「{{ item.category_name }}」を見る</a>
     </div>
+
+    {% elif is_logged_in %}
+    <!-- ② ログイン中の別ユーザー向けコピーセクション -->
+    <div class="shared-copy-section" id="copy-section">
+        {% if already_copied %}
+        <!-- コピー済み状態 -->
+        <div class="shared-copy-status">✅ コピー済みです</div>
+        <button class="shared-copy-btn shared-copy-btn--secondary" id="copy-btn"
+                onclick="copyItem('{{ item.id }}', true)">
+            📥 もう一度コピーする
+        </button>
+        {% else %}
+        <!-- 未コピー状態 -->
+        <p class="shared-copy-lead">
+            気になるアイテムですか？<br>
+            自分のRe:findにコピーして、リマインドを受け取れます
+        </p>
+        <button class="shared-copy-btn shared-copy-btn--primary" id="copy-btn"
+                onclick="copyItem('{{ item.id }}', false)">
+            📥 自分のRe:findにコピー
+        </button>
+        {% endif %}
+        <a href="/?openExternalBrowser=1" class="shared-copy-list-link">一覧で確認する →</a>
+    </div>
+
     {% else %}
-    <!-- 非ユーザー向け宣伝 -->
+    <!-- ③ 未ログインユーザー向け宣伝 -->
     <p class="shared-promo">
         このアイテムは共有リンクで閲覧しています<br>
         <a href="/">Re:find で自分の情報も管理してみませんか？</a>
@@ -116,6 +141,44 @@ document.querySelector('.shared-url')?.addEventListener('click', function() {
         line_user_id: '{{ item.line_user_id }}'
     }));
 });
+</script>
+{% endif %}
+
+{% if item and is_logged_in and not is_owner %}
+<script>
+async function copyItem(itemId, isRecopy) {
+    if (isRecopy) {
+        if (!confirm('もう一度コピーしますか？')) return;
+    }
+
+    const btn = document.getElementById('copy-btn');
+    btn.disabled = true;
+    btn.textContent = 'コピー中…';
+
+    try {
+        const res = await fetch('/api/items/copy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_id: itemId }),
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+            const section = document.getElementById('copy-section');
+            section.innerHTML =
+                '<div class="shared-copy-status">✅ コピーしました！</div>' +
+                '<a href="/?openExternalBrowser=1" class="shared-copy-list-link">一覧で確認する →</a>';
+        } else {
+            alert(data.error || 'コピーに失敗しました');
+            btn.disabled = false;
+            btn.textContent = isRecopy ? '📥 もう一度コピーする' : '📥 自分のRe:findにコピー';
+        }
+    } catch {
+        alert('通信エラーが発生しました');
+        btn.disabled = false;
+        btn.textContent = isRecopy ? '📥 もう一度コピーする' : '📥 自分のRe:findにコピー';
+    }
+}
 </script>
 {% endif %}
 {% endblock %}
