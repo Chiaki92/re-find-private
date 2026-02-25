@@ -36,27 +36,37 @@
          login.html では {% block header %}{% endblock %} と空にする。 #}
     {% block header %}
     <nav class="refind-header">
-        <!-- 左側：ロゴ -->
+        <!-- 左側：ロゴ（トップページへのリンク） -->
         <a href="/" class="refind-logo">
             Re:<span class="refind-logo-accent">find</span>
         </a>
 
-        <!-- 右側：ボタン群 -->
+        <!-- 右側：「追加する」ボタン + ハンバーガーメニュー -->
         <div class="refind-header-actions">
-            <!-- カテゴリ管理ページへのリンク -->
-            <a href="/categories" class="btn-category-manage">
-                <i class="bi bi-folder"></i> カテゴリ管理
+            {% if line_bot_url %}
+            <a href="{{ line_bot_url }}" target="_blank" class="btn-line-add">
+                <i class="bi bi-chat-dots-fill"></i> 追加する
             </a>
-            <!-- 通知設定ページへのリンク -->
-            <a href="/settings" class="btn-settings">
-                <i class="bi bi-gear"></i>
-            </a>
-            <!-- ログアウトボタン -->
-            <button id="logout-btn" class="btn-logout">
-                ログアウト
+            {% endif %}
+
+            <button id="hamburger-btn" class="btn-hamburger" aria-label="メニューを開く">
+                <i class="bi bi-list" id="hamburger-icon"></i>
             </button>
         </div>
     </nav>
+
+    <!-- ハンバーガーメニュー（ドロップダウン） -->
+    <div id="hamburger-menu" class="hamburger-menu" style="display: none;">
+        <a href="/categories" class="hamburger-menu-item">
+            <i class="bi bi-folder"></i> カテゴリ管理
+        </a>
+        <a href="/settings" class="hamburger-menu-item">
+            <i class="bi bi-gear"></i> 通知設定
+        </a>
+        <button id="logout-btn" class="hamburger-menu-item hamburger-menu-logout">
+            <i class="bi bi-box-arrow-right"></i> ログアウト
+        </button>
+    </div>
     {% endblock %}
 
     <!-- ===== メインコンテンツ =====

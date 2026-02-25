@@ -192,10 +192,62 @@ function showToast(message, type = 'success') {
 
 // ページ読み込み完了後に実行
 document.addEventListener('DOMContentLoaded', function() {
-    
-    // ログアウトボタンを探す（存在しないページもあるので if でチェック）
+
+    // ----------------------------------------------------------
+    // 3-1. ハンバーガーメニューの開閉処理
+    // ----------------------------------------------------------
+
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    const hamburgerMenu = document.getElementById('hamburger-menu');
+    const hamburgerIcon = document.getElementById('hamburger-icon');
+
+    if (hamburgerBtn && hamburgerMenu && hamburgerIcon) {
+
+        // ヘッダーの実際の高さに合わせてメニュー位置を設定
+        const header = document.querySelector('.refind-header');
+        const lineAddBtn = document.querySelector('.btn-line-add');
+
+        function closeMenu() {
+            hamburgerMenu.style.display = 'none';
+            hamburgerIcon.className = 'bi bi-list';
+            hamburgerBtn.setAttribute('aria-label', 'メニューを開く');
+            if (lineAddBtn) lineAddBtn.classList.remove('btn-line-add-hidden');
+        }
+
+        function openMenu() {
+            // ヘッダー高さを動的に取得してメニュー位置を合わせる
+            if (header) {
+                hamburgerMenu.style.top = header.offsetHeight + 'px';
+            }
+            hamburgerMenu.style.display = 'block';
+            hamburgerIcon.className = 'bi bi-x-lg';
+            hamburgerBtn.setAttribute('aria-label', 'メニューを閉じる');
+            if (lineAddBtn) lineAddBtn.classList.add('btn-line-add-hidden');
+        }
+
+        hamburgerBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isOpen = hamburgerMenu.style.display !== 'none';
+            if (isOpen) {
+                closeMenu();
+            } else {
+                openMenu();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!hamburgerMenu.contains(e.target) && !hamburgerBtn.contains(e.target)) {
+                closeMenu();
+            }
+        });
+    }
+
+    // ----------------------------------------------------------
+    // 3-2. ログアウト処理
+    // ----------------------------------------------------------
+
     const logoutBtn = document.getElementById('logout-btn');
-    
+
     if (logoutBtn) {
         logoutBtn.addEventListener('click', function() {
             // 確認ダイアログを表示

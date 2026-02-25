@@ -214,6 +214,98 @@ input, select, textarea {
     border-color: var(--color-danger);
 }
 
+/* 「追加する」ボタン（LINE Bot のトーク画面を開く） */
+.btn-line-add {
+    background-color: var(--color-success);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+}
+.btn-line-add:hover {
+    background-color: #05b54c;
+    color: #fff;
+    text-decoration: none;
+}
+/* メニュー開閉時に非表示にする */
+.btn-line-add-hidden {
+    display: none !important;
+}
+
+/* ハンバーガーメニューボタン（☰ アイコン） */
+.btn-hamburger {
+    background: none;
+    border: none;
+    color: var(--color-text);
+    font-size: 22px;
+    padding: 4px 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+.btn-hamburger:hover {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+/* ハンバーガーメニュー（ドロップダウン） */
+.hamburger-menu {
+    position: fixed;
+    top: 49px;
+    right: 0;
+    width: 200px;
+    background-color: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    z-index: 49;
+    overflow: hidden;
+}
+
+/* メニュー項目（共通スタイル） */
+.hamburger-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text);
+    text-decoration: none;
+    border: none;
+    background: none;
+    width: 100%;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    text-align: left;
+}
+.hamburger-menu-item:hover {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+/* ログアウト項目（赤色で区別する） */
+.hamburger-menu-logout {
+    border-top: 1px solid var(--color-border);
+    color: var(--color-danger);
+}
+.hamburger-menu-logout:hover {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
 
 /* ----------------------------------------------------------
    5. 共通ボタンスタイル

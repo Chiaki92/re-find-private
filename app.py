@@ -148,6 +148,24 @@ app.register_blueprint(webhook_bp)
 app.register_blueprint(api_demo_bp)  # デモ通知（発表後に削除）
 
 # ============================================
+# テンプレートグローバル変数
+# ============================================
+# 全テンプレートで使える変数を注入する。
+# テンプレート内で {{ line_bot_url }} と書くだけで参照できる。
+
+LINE_BOT_BASIC_ID = os.environ.get("LINE_BOT_BASIC_ID")
+
+@app.context_processor
+def inject_global_vars():
+    """全テンプレートで使えるグローバル変数を注入する。"""
+    bot_url = None
+    if LINE_BOT_BASIC_ID:
+        bot_url = f"https://line.me/R/ti/p/{LINE_BOT_BASIC_ID}"
+    return {
+        "line_bot_url": bot_url
+    }
+
+# ============================================
 # ルート（app.py に残すもの）
 # ============================================
 from extensions import supabase_admin
