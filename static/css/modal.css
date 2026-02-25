@@ -70,6 +70,15 @@
     border-bottom: 1px solid var(--color-border);
 }
 
+/* アクションボタン群（対応済み・通知停止・共有） */
+.edit-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
 /* ✕ 閉じるボタン */
 .edit-modal-close-btn {
     background: none;
@@ -217,16 +226,14 @@
 
 /* ===== 通知停止/再開ボタン ===== */
 .edit-modal-archive-btn {
-    width: 100%;
-    padding: 11px;
     background-color: #FFF3E0;
     color: #E8A840;
     border: 1px solid #E8A840;
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 600;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
     cursor: pointer;
-    margin-bottom: 12px;
     transition: all 0.2s;
 }
 .edit-modal-archive-btn:hover {
@@ -236,16 +243,14 @@
 
 /* ===== 共有リンク作成ボタン ===== */
 .edit-modal-share-btn {
-    width: 100%;
-    padding: 11px;
     background-color: var(--color-primary-light);
     color: var(--color-primary);
     border: 1px solid var(--color-primary);
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 600;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
     cursor: pointer;
-    margin-bottom: 12px;
     transition: all 0.2s;
 }
 .edit-modal-share-btn:hover {

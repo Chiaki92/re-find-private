@@ -204,7 +204,11 @@
              左：対応済み/未対応 切り替えボタン
              右：✕ 閉じるボタン #}
         <div class="edit-modal-header">
-            <button id="modal-done-btn" class="edit-modal-done-btn">✓ 対応済みにする</button>
+            <div class="edit-modal-actions">
+                <button id="modal-done-btn" class="edit-modal-done-btn">✓ 対応済みにする</button>
+                <button id="modal-archive-btn" class="edit-modal-archive-btn">🔕 通知を停止する</button>
+                <button id="modal-share-btn" class="edit-modal-share-btn">🔗 共有リンクを作成</button>
+            </div>
             <button id="modal-close-btn" class="edit-modal-close-btn">✕</button>
         </div>
 
@@ -242,13 +246,6 @@
             {# 保存日（modal.js が textContent で日付を設定） #}
             <div id="modal-date" class="edit-modal-date"></div>
 
-            {# 通知停止/再開ボタン
-                 modal.js が status に応じてテキストと表示を切り替える #}
-            <button id="modal-archive-btn" class="edit-modal-archive-btn">🔕 通知を停止する</button>
-
-            {# 共有リンク作成ボタン
-                 クリック → modal.js が /api/items/:id/share を呼んでURLをコピー #}
-            <button id="modal-share-btn" class="edit-modal-share-btn">🔗 共有リンクを作成</button>
         </div>
 
         {# --- フッター ---
