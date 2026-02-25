@@ -43,6 +43,7 @@
    data-category="{{ id }}"   → カテゴリIDでフィルタ
    ---------------------------------------------------------- #}
 <div class="category-tabs-wrapper">
+    <button class="tab-scroll-btn tab-scroll-left" aria-label="左へスクロール">‹</button>
     <div class="category-tabs">
         <!-- 「すべて」は常に先頭。初期状態で active -->
         <button class="category-tab active" data-category="all">すべて<span class="tab-count">{{ items | length }}</span></button>
@@ -50,6 +51,7 @@
         <button class="category-tab" data-category="{{ category.id }}">{{ category.name }}<span class="tab-count">{{ category.item_count }}</span></button>
         {% endfor %}
     </div>
+    <button class="tab-scroll-btn tab-scroll-right" aria-label="右へスクロール">›</button>
     <!-- 今日の通知一覧ページへのリンク（LINE緑で視覚的に区別） -->
     <a href="/notify-list" class="notify-today-btn" title="今日の通知一覧">📬 今日</a>
 </div>

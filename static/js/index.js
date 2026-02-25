@@ -218,6 +218,42 @@ document.addEventListener('DOMContentLoaded', function() {
        のようなURLで来た場合、該当カテゴリタブを自動選択する。
        ---------------------------------------------------------- */
 
+    /* ----------------------------------------------------------
+       7.5. カテゴリタブの横スクロール補助（PC向け）
+
+       - マウスホイールで横スクロール
+       - 左右ボタンクリックでスクロール
+       ---------------------------------------------------------- */
+
+    var categoryTabs = document.querySelector('.category-tabs');
+
+    // マウスホイールで横スクロール
+    if (categoryTabs) {
+        categoryTabs.addEventListener('wheel', function(e) {
+            if (Math.abs(e.deltaY) > 0) {
+                e.preventDefault();
+                categoryTabs.scrollLeft += e.deltaY;
+            }
+        }, { passive: false });
+    }
+
+    // 左右ボタンでスクロール
+    var scrollLeftBtn = document.querySelector('.tab-scroll-left');
+    var scrollRightBtn = document.querySelector('.tab-scroll-right');
+    var scrollAmount = 120;
+
+    if (scrollLeftBtn) {
+        scrollLeftBtn.addEventListener('click', function() {
+            categoryTabs.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+        });
+    }
+    if (scrollRightBtn) {
+        scrollRightBtn.addEventListener('click', function() {
+            categoryTabs.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        });
+    }
+
+
     var hash = decodeURIComponent(location.hash);
     if (hash.startsWith('#cat-')) {
         var catName = hash.substring(5);

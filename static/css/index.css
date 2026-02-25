@@ -25,7 +25,37 @@
     /* タブとボタンを横並びに配置する */
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
+}
+
+/* カテゴリタブの左右スクロールボタン（PC向け） */
+.tab-scroll-btn {
+    display: none;              /* モバイルでは非表示 */
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--color-card-border);
+    border-radius: 50%;
+    background-color: var(--color-card);
+    color: var(--color-text-muted);
+    font-size: 16px;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.tab-scroll-btn:hover {
+    background-color: #E5DDD4;
+    color: var(--color-text-primary);
+}
+
+/* PC幅でのみ表示 */
+@media (min-width: 768px) {
+    .tab-scroll-btn {
+        display: block;
+    }
 }
 
 .category-tabs {
@@ -33,7 +63,7 @@
     gap: 8px;
     overflow-x: auto;               /* 横スクロール可能にする */
     -webkit-overflow-scrolling: touch;  /* iOS のスムーズスクロール */
-    padding-bottom: 4px;            /* スクロールバーのスペース */
+    padding: 8px 0 4px;             /* 上:バッジ表示用 下:スクロールバー用 */
     flex: 1;                        /* 残りの幅をすべて占める */
     min-width: 0;                   /* ボタンがあるときに正しく縮む */
 }
