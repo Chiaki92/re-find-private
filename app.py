@@ -187,9 +187,11 @@ def index():
     """一覧画面：ログインユーザーのアイテムをタイル表示"""
     line_user_id = get_current_user_line_id()
 
+    # sort_order → created_at の順でソート（カテゴリ並び替え機能対応）
     categories = supabase_admin.table("categories") \
         .select("id, name") \
         .eq("line_user_id", line_user_id) \
+        .order("sort_order") \
         .order("created_at") \
         .execute()
 
@@ -385,9 +387,11 @@ def notify_list():
         app.logger.error(f"通知一覧取得エラー: {e}")
 
     # ---- カテゴリ一覧を取得（モーダルで使用） ----
+    # sort_order → created_at の順でソート（カテゴリ並び替え機能対応）
     categories = supabase_admin.table("categories") \
         .select("id, name") \
         .eq("line_user_id", line_user_id) \
+        .order("sort_order") \
         .order("created_at") \
         .execute()
 

@@ -17,9 +17,11 @@ def categories_page():
     """カテゴリ管理画面を表示"""
     line_user_id = get_current_user_line_id()
 
+    # sort_order → created_at の順でソート（並び替え機能対応）
     categories = supabase_admin.table("categories") \
-        .select("id, name") \
+        .select("id, name, sort_order") \
         .eq("line_user_id", line_user_id) \
+        .order("sort_order") \
         .order("created_at") \
         .execute()
 
@@ -46,9 +48,23 @@ def create_category():
         return {"error": "カテゴリ名を入力してください", "code": "VALIDATION_ERROR"}, 400
 
     try:
+        # 現在の最大 sort_order を取得（未分類の 999999 は除く）
+        existing = supabase_admin.table("categories") \
+            .select("sort_order") \
+            .eq("line_user_id", line_user_id) \
+            .lt("sort_order", 999999) \
+            .order("sort_order", desc=True) \
+            .limit(1) \
+            .execute()
+
+        # 新しいカテゴリは末尾（未分類の直前）に配置
+        new_sort_order = (existing.data[0]["sort_order"] + 1) if existing.data else 1
+
+        # insert に sort_order を追加
         result = supabase_admin.table("categories").insert({
             "line_user_id": line_user_id,
             "name": name,
+            "sort_order": new_sort_order,
         }).execute()
         return {"ok": True, "category": result.data[0]}
     except Exception as e:
@@ -114,4 +130,36 @@ def delete_category(category_id):
         return {"ok": True}
     except Exception as e:
         current_app.logger.error(f"カテゴリ削除エラー: {e}")
+        return {"error": "サーバーエラーが発生しました", "code": "INTERNAL_ERROR"}, 500
+
+
+@api_categories_bp.route("/api/categories/reorder", methods=["POST"])
+@login_required
+def reorder_categories():
+    """カテゴリの並び順を一括更新する"""
+    line_user_id = get_current_user_line_id()
+    order_list = request.json.get("order", [])
+
+    # バリデーション: 並び順データが空の場合はエラー
+    if not order_list:
+        return {"error": "並び順データがありません", "code": "VALIDATION_ERROR"}, 400
+
+    try:
+        # 各カテゴリの sort_order を更新
+        for item in order_list:
+            category_id = item.get("id")
+            sort_order = item.get("sort_order")
+            if not category_id or sort_order is None:
+                continue
+
+            # line_user_id で絞り込んで他ユーザーのデータを変更できないようにする
+            supabase_admin.table("categories") \
+                .update({"sort_order": sort_order}) \
+                .eq("id", category_id) \
+                .eq("line_user_id", line_user_id) \
+                .execute()
+
+        return {"ok": True}
+    except Exception as e:
+        current_app.logger.error(f"カテゴリ並び替えエラー: {e}")
         return {"error": "サーバーエラーが発生しました", "code": "INTERNAL_ERROR"}, 500

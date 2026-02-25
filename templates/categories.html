@@ -34,10 +34,42 @@
     </button>
 </div>
 
+<!-- ===== 一括ソートボタン ===== -->
+<div class="sort-buttons">
+    <span class="sort-buttons-label">並べ替え：</span>
+    <button class="sort-btn" id="sort-by-count" title="アイテム数が多い順に並べ替え">
+        <i class="bi bi-sort-numeric-down"></i> アイテム数順
+    </button>
+    <button class="sort-btn" id="sort-by-name" title="あいうえお順に並べ替え">
+        <i class="bi bi-sort-alpha-down"></i> あいうえお順
+    </button>
+    <button class="sort-btn" id="sort-by-created" title="作成日順に戻す">
+        <i class="bi bi-clock-history"></i> 作成日順
+    </button>
+</div>
+
 <!-- ===== カテゴリ一覧 ===== -->
 <div class="category-list" id="category-list">
     {% for category in categories %}
-    <div class="category-item" data-category-id="{{ category.id }}">
+    <div class="category-item"
+         data-category-id="{{ category.id }}"
+         data-sort-order="{{ category.sort_order }}"
+         data-item-count="{{ category.item_count or 0 }}"
+         data-category-name="{{ category.name }}">
+
+        <!-- 上下移動ボタン（「未分類」には表示しない） -->
+        {% if category.name != '未分類' %}
+        <div class="move-buttons">
+            <button class="move-btn move-up-btn" title="上に移動">
+                <i class="bi bi-chevron-up"></i>
+            </button>
+            <button class="move-btn move-down-btn" title="下に移動">
+                <i class="bi bi-chevron-down"></i>
+            </button>
+        </div>
+        {% else %}
+        <div class="move-buttons-spacer"></div>
+        {% endif %}
 
         <!-- カテゴリ名（直接編集可能） -->
         <input type="text"
@@ -69,7 +101,8 @@
 <!-- 注意書き -->
 <p class="categories-note">
     カテゴリを削除すると、そのカテゴリのアイテムは<br>
-    「未分類」に移動します
+    「未分類」に移動します<br>
+    ※「未分類」は常に一番下に固定されます
 </p>
 
 <!-- ===== AI分類カテゴリの参照 ===== -->
