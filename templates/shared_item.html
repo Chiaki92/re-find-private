@@ -15,13 +15,18 @@
 
 {% block title %}Re:find - 共有アイテム{% endblock %}
 
-{# ヘッダーを共有ページ用に上書き（ログインボタンなし） #}
+{# ヘッダーを共有ページ用に上書き #}
 {% block header %}
 <div class="shared-header">
     <span class="shared-header-logo">
         Re:<span class="refind-logo-accent">find</span>
     </span>
     <span class="shared-header-label">共有アイテム</span>
+    {% if is_logged_in and line_bot_url %}
+    <a href="{{ line_bot_url }}" target="_blank" class="btn-line-add shared-header-add">
+        <i class="bi bi-chat-dots-fill"></i> 追加する
+    </a>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -106,7 +111,7 @@
             📥 自分のRe:findにコピー
         </button>
         {% endif %}
-        <a href="/?openExternalBrowser=1" class="shared-copy-list-link">一覧で確認する →</a>
+        <a href="/?openExternalBrowser=1" class="shared-copy-list-link">自分の一覧を確認する →</a>
     </div>
 
     {% else %}
@@ -167,7 +172,7 @@ async function copyItem(itemId, isRecopy) {
             const section = document.getElementById('copy-section');
             section.innerHTML =
                 '<div class="shared-copy-status">✅ コピーしました！</div>' +
-                '<a href="/?openExternalBrowser=1" class="shared-copy-list-link">一覧で確認する →</a>';
+                '<a href="/?openExternalBrowser=1" class="shared-copy-list-link">自分の一覧を確認する →</a>';
         } else {
             alert(data.error || 'コピーに失敗しました');
             btn.disabled = false;
