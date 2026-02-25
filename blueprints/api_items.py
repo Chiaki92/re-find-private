@@ -25,6 +25,26 @@ def update_item(item_id):
     if not update_data:
         return {"error": "更新するデータがありません", "code": "VALIDATION_ERROR"}, 400
 
+    # --- ステータス変更時の副作用 ---
+    if update_data.get("status") == "archived":
+        # 通知停止: next_notify_at をクリア
+        update_data["next_notify_at"] = None
+
+    elif update_data.get("status") == "pending":
+        # 通知再開 (archived→pending, done→pending 共通):
+        # notify_count を 0 にリセットし、翌日の notify_time に通知を設定
+        update_data["notify_count"] = 0
+        settings_res = supabase_admin.table("user_settings") \
+            .select("notify_time") \
+            .eq("line_user_id", line_user_id) \
+            .execute()
+        notify_time = settings_res.data[0].get("notify_time", "21:00") if settings_res.data else "21:00"
+        hour, minute = map(int, notify_time.split(":")[:2])
+        next_at = (datetime.now(JST) + timedelta(days=1)).replace(
+            hour=hour, minute=minute, second=0, microsecond=0
+        )
+        update_data["next_notify_at"] = next_at.isoformat()
+
     try:
         supabase_admin.table("items") \
             .update(update_data) \
@@ -34,6 +54,51 @@ def update_item(item_id):
         return {"ok": True}
     except Exception as e:
         current_app.logger.error(f"アイテム更新エラー: {e}")
+        return {"error": "サーバーエラーが発生しました", "code": "INTERNAL_ERROR"}, 500
+
+
+@api_items_bp.route("/api/items/bulk-action", methods=["POST"])
+@login_required
+def bulk_action():
+    """複数アイテムに対して一括操作を行う（削除・通知停止・対応済み）"""
+    line_user_id = get_current_user_line_id()
+    data = request.json or {}
+
+    item_ids = data.get("item_ids", [])
+    action = data.get("action")
+
+    if not item_ids or not isinstance(item_ids, list):
+        return {"error": "item_ids が必要です", "code": "VALIDATION_ERROR"}, 400
+
+    if action not in ("delete", "archive", "done"):
+        return {"error": "不正なアクションです", "code": "VALIDATION_ERROR"}, 400
+
+    if len(item_ids) > 100:
+        return {"error": "一度に100件までです", "code": "VALIDATION_ERROR"}, 400
+
+    try:
+        if action == "delete":
+            supabase_admin.table("items") \
+                .update({"deleted_at": datetime.now(JST).isoformat()}) \
+                .in_("id", item_ids) \
+                .eq("line_user_id", line_user_id) \
+                .execute()
+        elif action == "archive":
+            supabase_admin.table("items") \
+                .update({"status": "archived", "next_notify_at": None}) \
+                .in_("id", item_ids) \
+                .eq("line_user_id", line_user_id) \
+                .execute()
+        elif action == "done":
+            supabase_admin.table("items") \
+                .update({"status": "done"}) \
+                .in_("id", item_ids) \
+                .eq("line_user_id", line_user_id) \
+                .execute()
+
+        return {"ok": True}
+    except Exception as e:
+        current_app.logger.error(f"一括操作エラー: {e}")
         return {"error": "サーバーエラーが発生しました", "code": "INTERNAL_ERROR"}, 500
 
 

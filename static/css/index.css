@@ -418,3 +418,214 @@
     color: #fff;
     text-decoration: none;
 }
+
+
+/* ----------------------------------------------------------
+   7. セクション分けヘッダー（通知停止 / 対応済み）
+
+   pending カードの下に「▶ 通知停止 (3)」「▶ 対応済み (2)」
+   のようなヘッダーを挿入する。クリックで展開/折りたたみ。
+   ---------------------------------------------------------- */
+
+.section-divider {
+    grid-column: 1 / -1;            /* グリッドの全列を使う */
+    padding: 12px 0 4px;
+    margin-top: 8px;
+}
+
+.section-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+}
+
+.section-toggle:hover {
+    background-color: var(--color-tab-bg);
+}
+
+.section-toggle-icon {
+    font-size: 10px;
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+.section-count {
+    background-color: var(--color-tab-bg);
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+
+/* ----------------------------------------------------------
+   7.5. 通知停止アイテムのスタイル
+   ---------------------------------------------------------- */
+
+/* 通知停止カードは半透明 */
+.item-card[data-status="archived"] {
+    opacity: 0.6;
+}
+
+/* 通知停止バッジ（カード右上） */
+.item-card-archived-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(155, 142, 128, 0.8);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+
+/* ----------------------------------------------------------
+   8. 選択モード
+   ---------------------------------------------------------- */
+
+/* 選択モードボタン（検索バー横） */
+.select-mode-btn {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-input-border);
+    border-radius: 10px;
+    background-color: var(--color-input-bg);
+    color: var(--color-text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.select-mode-btn:hover {
+    background-color: var(--color-tab-bg);
+}
+
+.select-mode-btn.active {
+    background-color: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary);
+}
+
+/* 選択中カードのアウトライン */
+.item-card.selected {
+    outline: 3px solid var(--color-primary);
+    outline-offset: -3px;
+}
+
+/* 選択モード時のチェックボックス（疑似要素） */
+body.select-mode .item-card::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--color-text-muted);
+    border-radius: 6px;
+    background: rgba(255, 252, 248, 0.9);
+    z-index: 2;
+    box-sizing: border-box;
+}
+
+/* 選択済みカードのチェックマーク */
+body.select-mode .item-card.selected::after {
+    content: '✓';
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* ----------------------------------------------------------
+   9. 一括操作バー（画面下部固定）
+   ---------------------------------------------------------- */
+
+.bulk-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background-color: var(--color-card);
+    border-top: 1px solid var(--color-border);
+    padding: 10px 16px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.bulk-bar-info {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-right: auto;
+}
+
+.bulk-bar-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.bulk-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bulk-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.bulk-btn-select-all {
+    background-color: var(--color-tab-bg);
+    color: var(--color-text);
+}
+
+.bulk-btn-archive {
+    background-color: #FFF3E0;
+    color: #E8A840;
+}
+
+.bulk-btn-done {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+}
+
+.bulk-btn-delete {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
+.bulk-btn-cancel {
+    background-color: var(--color-tab-bg);
+    color: var(--color-text-muted);
+}

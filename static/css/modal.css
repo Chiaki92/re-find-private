@@ -215,6 +215,25 @@
 }
 
 
+/* ===== 通知停止/再開ボタン ===== */
+.edit-modal-archive-btn {
+    width: 100%;
+    padding: 11px;
+    background-color: #FFF3E0;
+    color: #E8A840;
+    border: 1px solid #E8A840;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+.edit-modal-archive-btn:hover {
+    background-color: #FFE8CC;
+}
+
+
 /* ===== 共有リンク作成ボタン ===== */
 .edit-modal-share-btn {
     width: 100%;

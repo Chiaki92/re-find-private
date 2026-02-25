@@ -75,6 +75,9 @@
         <option value="title">タイトル順</option>
         <option value="notify">通知日順</option>
     </select>
+    <button id="select-mode-btn" class="select-mode-btn" title="選択モード">
+        <i class="bi bi-check2-square"></i>
+    </button>
 </div>
 
 {# ----------------------------------------------------------
@@ -149,14 +152,33 @@
             <span class="item-card-date">{{ item.created_at | timeago }}</span>
         </div>
 
-        {# --- 対応済みバッジ ---
-             status が "done" のとき、カード右上に表示（position: absolute） #}
+        {# --- ステータスバッジ ---
+             カード右上にステータスを表示（position: absolute） #}
         {% if item.status == 'done' %}
         <div class="item-card-done-badge">✓ 対応済み</div>
+        {% elif item.status == 'archived' %}
+        <div class="item-card-archived-badge">🔕 通知停止</div>
         {% endif %}
     </div>
     {% endfor %}
 
+</div>
+
+{# ----------------------------------------------------------
+   2.5. 一括操作ツールバー
+
+   選択モード中に画面下部に固定表示されるアクションバー。
+   index.js が選択モードのON/OFF と選択件数の更新を担当。
+   ---------------------------------------------------------- #}
+<div id="bulk-bar" class="bulk-bar" style="display: none;">
+    <div class="bulk-bar-info"><span id="bulk-count">0</span>件選択中</div>
+    <div class="bulk-bar-actions">
+        <button id="bulk-select-all-btn" class="bulk-btn bulk-btn-select-all">全選択</button>
+        <button id="bulk-archive-btn" class="bulk-btn bulk-btn-archive">通知停止</button>
+        <button id="bulk-done-btn" class="bulk-btn bulk-btn-done">対応済み</button>
+        <button id="bulk-delete-btn" class="bulk-btn bulk-btn-delete">削除</button>
+    </div>
+    <button id="bulk-cancel-btn" class="bulk-btn bulk-btn-cancel">キャンセル</button>
 </div>
 
 
@@ -219,6 +241,10 @@
 
             {# 保存日（modal.js が textContent で日付を設定） #}
             <div id="modal-date" class="edit-modal-date"></div>
+
+            {# 通知停止/再開ボタン
+                 modal.js が status に応じてテキストと表示を切り替える #}
+            <button id="modal-archive-btn" class="edit-modal-archive-btn">🔕 通知を停止する</button>
 
             {# 共有リンク作成ボタン
                  クリック → modal.js が /api/items/:id/share を呼んでURLをコピー #}

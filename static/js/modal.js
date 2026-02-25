@@ -38,7 +38,7 @@ let currentItemId = null;
      - category_id  : カテゴリID
      - memo         : メモ
      - type         : 'image' | 'url' | 'text'
-     - status       : 'pending' | 'done'
+     - status       : 'pending' | 'done' | 'archived'
      - image_url    : 画像URL（imageタイプ）
      - ogp_image    : OGP画像URL（urlタイプ）
      - original_url : 元のURL（urlタイプ）
@@ -103,6 +103,19 @@ function openModal(item) {
     } else {
         doneBtn.textContent = '✓ 対応済みにする';
         doneBtn.classList.remove('is-done');
+    }
+
+    // --- 通知停止/再開ボタンの状態を反映 ---
+    const archiveBtn = document.getElementById('modal-archive-btn');
+    if (item.status === 'pending') {
+        archiveBtn.style.display = '';
+        archiveBtn.textContent = '🔕 通知を停止する';
+    } else if (item.status === 'archived') {
+        archiveBtn.style.display = '';
+        archiveBtn.textContent = '🔔 通知を再開する';
+    } else {
+        // done のときは非表示
+        archiveBtn.style.display = 'none';
     }
 
     // --- 共有リンクボタンをリセット ---
@@ -213,6 +226,25 @@ document.addEventListener('DOMContentLoaded', function() {
         if (result) {
             const message = newStatus === 'done' ? '対応済みにしました' : '未対応に戻しました';
             showToast(message);
+            window.location.reload();
+        }
+    });
+
+
+    /* --- 通知停止/再開ボタン --- */
+    document.getElementById('modal-archive-btn').addEventListener('click', async function() {
+        if (!currentItemId) return;
+
+        const item = ITEMS_DATA.find(i => String(i.id) === String(currentItemId));
+        const isArchived = item && item.status === 'archived';
+        const newStatus = isArchived ? 'pending' : 'archived';
+
+        const result = await apiPut(`/api/items/${currentItemId}`, {
+            status: newStatus,
+        });
+
+        if (result) {
+            showToast(isArchived ? '通知を再開しました' : '通知を停止しました');
             window.location.reload();
         }
     });

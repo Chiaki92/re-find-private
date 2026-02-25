@@ -6,7 +6,9 @@
      1. カテゴリタブのフィルタリング処理
      2. キーワード検索のフィルタリング処理
      3. ソート（並び替え）処理
-     4. カードクリック → モーダルを開く（modal.js の関数を呼ぶ）
+     4. セクション分け（pending → archived → done）
+     5. 選択モード・一括操作
+     6. カードクリック → モーダルを開く（modal.js の関数を呼ぶ）
 
    ■ 前提：
      - common.js が先に読み込まれていること
@@ -27,8 +29,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var sortSelect = document.getElementById('sort-select');
 
     // 現在のフィルタ状態を保持する変数
-    var currentCategory = 'all';      // 選択中のカテゴリ（'all' = すべて）
-    var currentSearchQuery = '';       // 検索クエリ（小文字化済み）
+    var currentCategory = 'all';
+    var currentSearchQuery = '';
+
+    // セクションの折りたたみ状態（初期: 折りたたみ）
+    var sectionCollapsed = { archived: true, done: true };
 
 
     /* ----------------------------------------------------------
@@ -37,16 +42,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     tabs.forEach(function(tab) {
         tab.addEventListener('click', function() {
-            // アクティブタブの切り替え
-            tabs.forEach(function(t) {
-                t.classList.remove('active');
-            });
+            tabs.forEach(function(t) { t.classList.remove('active'); });
             this.classList.add('active');
-
-            // 現在のカテゴリを更新
             currentCategory = this.getAttribute('data-category');
-
-            // フィルタ＆ソートを再適用
             applyFiltersAndSort();
         });
     });
@@ -54,9 +52,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     /* ----------------------------------------------------------
        2. 検索ボックスの入力処理
-
-       input イベントで1文字ごとにフィルタする（リアルタイム検索）。
-       DOM操作のみでAPIコールなし、カード数も限定的なのでデバウンス不要。
        ---------------------------------------------------------- */
 
     if (searchInput) {
@@ -80,10 +75,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     /* ----------------------------------------------------------
        4. フィルタ＆ソートの統合処理（中核ロジック）
-
-       カテゴリフィルタ、検索フィルタ、ソートの3つを
-       まとめて処理する。どのコントロールが変更されても
-       この関数が呼ばれる。
        ---------------------------------------------------------- */
 
     function applyFiltersAndSort() {
@@ -93,16 +84,21 @@ document.addEventListener('DOMContentLoaded', function() {
             var cardCategory = card.getAttribute('data-category-id');
             var cardTitle = (card.getAttribute('data-title') || '').toLowerCase();
 
-            // カテゴリ条件：「すべて」なら常にtrue
             var matchesCategory =
                 currentCategory === 'all' || cardCategory === currentCategory;
-
-            // 検索条件：クエリが空なら常にtrue
             var matchesSearch =
                 currentSearchQuery === '' || cardTitle.indexOf(currentSearchQuery) !== -1;
 
-            // 両方の条件を満たすカードだけ表示
-            card.style.display = (matchesCategory && matchesSearch) ? '' : 'none';
+            // フィルタの結果を data 属性にも記録（セクション分けで使う）
+            if (matchesCategory && matchesSearch) {
+                card.style.display = '';
+                card.removeAttribute('data-filtered-out');
+            } else {
+                card.style.display = 'none';
+                card.setAttribute('data-filtered-out', 'true');
+            }
+            // セクション非表示フラグをリセット
+            card.removeAttribute('data-section-hidden');
         });
 
         // --- Step B: ソート ---
@@ -113,34 +109,27 @@ document.addEventListener('DOMContentLoaded', function() {
             switch (sortKey) {
                 case 'newest':
                     return compareDates(b, a);
-
                 case 'oldest':
                     return compareDates(a, b);
-
                 case 'category':
                     var catA = a.getAttribute('data-category-name') || '';
                     var catB = b.getAttribute('data-category-name') || '';
                     var catCompare = catA.localeCompare(catB, 'ja');
                     if (catCompare !== 0) return catCompare;
-                    return compareDates(b, a);  // 同カテゴリ内は新しい順
-
+                    return compareDates(b, a);
                 case 'title':
                     var titleA = a.getAttribute('data-title') || '';
                     var titleB = b.getAttribute('data-title') || '';
                     return titleA.localeCompare(titleB, 'ja');
-
                 case 'notify':
                     var notifyA = a.getAttribute('data-next-notify-at') || '';
                     var notifyB = b.getAttribute('data-next-notify-at') || '';
-                    // 通知日なし（done/archived）は末尾へ
                     if (!notifyA && !notifyB) return compareDates(b, a);
                     if (!notifyA) return 1;
                     if (!notifyB) return -1;
-                    // 通知日が近い順（昇順）
                     if (notifyA < notifyB) return -1;
                     if (notifyA > notifyB) return 1;
-                    return compareDates(b, a);  // 同じ通知日なら新しい順
-
+                    return compareDates(b, a);
                 default:
                     return 0;
             }
@@ -151,15 +140,14 @@ document.addEventListener('DOMContentLoaded', function() {
             itemGrid.appendChild(card);
         });
 
-        // --- Step C: 空の状態を更新 ---
+        // --- Step C: セクション分けを挿入 ---
+        insertSectionDividers();
+
+        // --- Step D: 空の状態を更新 ---
         updateEmptyState();
     }
 
 
-    /**
-     * 2つのカードのcreated_at日時を比較するヘルパー
-     * ISO 8601 文字列は辞書順で比較可能
-     */
     function compareDates(a, b) {
         var dateA = a.getAttribute('data-created-at') || '';
         var dateB = b.getAttribute('data-created-at') || '';
@@ -170,17 +158,119 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     /* ----------------------------------------------------------
-       5. カードクリック → モーダルを開く
+       4.5. セクション分け表示
+       ---------------------------------------------------------- */
+
+    function insertSectionDividers() {
+        // 既存のセクションヘッダーを削除
+        itemGrid.querySelectorAll('.section-divider').forEach(function(el) { el.remove(); });
+
+        // フィルタ済み（表示対象）のカードを取得
+        var visibleCards = Array.from(cards).filter(function(c) {
+            return !c.hasAttribute('data-filtered-out');
+        });
+
+        // ステータスごとにグルーピング（ソート順を維持）
+        var pendingCards = visibleCards.filter(function(c) { return c.getAttribute('data-status') === 'pending'; });
+        var archivedCards = visibleCards.filter(function(c) { return c.getAttribute('data-status') === 'archived'; });
+        var doneCards = visibleCards.filter(function(c) { return c.getAttribute('data-status') === 'done'; });
+
+        // DOM再配置: pending → archivedヘッダー → archived → doneヘッダー → done
+        pendingCards.forEach(function(card) { itemGrid.appendChild(card); });
+
+        var archivedDivider = createSectionDivider('archived', '通知停止', archivedCards.length);
+        itemGrid.appendChild(archivedDivider);
+
+        archivedCards.forEach(function(card) { itemGrid.appendChild(card); });
+
+        var doneDivider = createSectionDivider('done', '対応済み', doneCards.length);
+        itemGrid.appendChild(doneDivider);
+
+        doneCards.forEach(function(card) { itemGrid.appendChild(card); });
+
+        // 検索中は全セクション強制展開、それ以外は折りたたみ状態を適用
+        var isSearching = currentSearchQuery !== '';
+        applySectionCollapse('archived', archivedCards, isSearching ? false : sectionCollapsed.archived);
+        applySectionCollapse('done', doneCards, isSearching ? false : sectionCollapsed.done);
+    }
+
+
+    function createSectionDivider(sectionId, label, count) {
+        var div = document.createElement('div');
+        div.className = 'section-divider';
+        div.setAttribute('data-section', sectionId);
+
+        var isCollapsed = currentSearchQuery !== '' ? false : sectionCollapsed[sectionId];
+        var iconChar = isCollapsed ? '▶' : '▼';
+
+        div.innerHTML = '<button class="section-toggle" data-target="' + sectionId + '">' +
+            '<span class="section-toggle-icon">' + iconChar + '</span> ' +
+            label + ' <span class="section-count">(' + count + ')</span>' +
+            '</button>';
+
+        div.querySelector('.section-toggle').addEventListener('click', function() {
+            toggleSection(sectionId);
+        });
+
+        return div;
+    }
+
+
+    function toggleSection(sectionId) {
+        sectionCollapsed[sectionId] = !sectionCollapsed[sectionId];
+
+        var sectionCards = Array.from(cards).filter(function(c) {
+            return c.getAttribute('data-status') === sectionId && !c.hasAttribute('data-filtered-out');
+        });
+
+        applySectionCollapse(sectionId, sectionCards, sectionCollapsed[sectionId]);
+    }
+
+
+    function applySectionCollapse(sectionId, sectionCards, collapsed) {
+        var divider = itemGrid.querySelector('.section-divider[data-section="' + sectionId + '"]');
+        if (!divider) return;
+
+        var icon = divider.querySelector('.section-toggle-icon');
+        icon.textContent = collapsed ? '▶' : '▼';
+
+        sectionCards.forEach(function(card) {
+            if (collapsed) {
+                card.style.display = 'none';
+                card.setAttribute('data-section-hidden', 'true');
+            } else {
+                card.style.display = '';
+                card.removeAttribute('data-section-hidden');
+            }
+        });
+    }
+
+
+    /* ----------------------------------------------------------
+       5. カードクリック → モーダル or 選択トグル
        ---------------------------------------------------------- */
 
     cards.forEach(function(card) {
         card.addEventListener('click', function() {
-            var itemId = this.getAttribute('data-item-id');
+            if (isSelectMode) {
+                // 選択モード: 選択/解除をトグル
+                var itemId = this.getAttribute('data-item-id');
+                if (selectedItems.has(itemId)) {
+                    selectedItems.delete(itemId);
+                    this.classList.remove('selected');
+                } else {
+                    selectedItems.add(itemId);
+                    this.classList.add('selected');
+                }
+                updateBulkCount();
+                return;
+            }
 
+            // 通常モード: モーダルを開く
+            var itemId = this.getAttribute('data-item-id');
             var item = ITEMS_DATA.find(function(i) {
                 return String(i.id) === String(itemId);
             });
-
             if (item) {
                 openModal(item);
             }
@@ -192,17 +282,15 @@ document.addEventListener('DOMContentLoaded', function() {
        6. ヘルパー関数
        ---------------------------------------------------------- */
 
-    /**
-     * フィルタ後に表示カードが0枚かチェックして、
-     * 空の状態メッセージの表示/非表示を切り替える
-     */
     function updateEmptyState() {
         var emptyState = document.querySelector('.empty-state');
         if (!emptyState) return;
 
         var visibleCount = 0;
         cards.forEach(function(card) {
-            if (card.style.display !== 'none') {
+            // フィルタで非表示 → カウントしない
+            // セクション折りたたみで非表示 → カウントする（存在はしている）
+            if (!card.hasAttribute('data-filtered-out')) {
                 visibleCount++;
             }
         });
@@ -212,22 +300,141 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     /* ----------------------------------------------------------
-       7. URLハッシュによるカテゴリ自動選択
-
-       共有ページからの遷移時 /?openExternalBrowser=1#cat-カテゴリ名
-       のようなURLで来た場合、該当カテゴリタブを自動選択する。
+       7. 選択モード・一括操作
        ---------------------------------------------------------- */
 
-    /* ----------------------------------------------------------
-       7.5. カテゴリタブの横スクロール補助（PC向け）
+    var isSelectMode = false;
+    var selectedItems = new Set();
+    var selectModeBtn = document.getElementById('select-mode-btn');
+    var bulkBar = document.getElementById('bulk-bar');
+    var bulkCount = document.getElementById('bulk-count');
 
-       - マウスホイールで横スクロール
-       - 左右ボタンクリックでスクロール
+    // 選択モードの切り替え
+    if (selectModeBtn) {
+        selectModeBtn.addEventListener('click', function() {
+            isSelectMode = !isSelectMode;
+            document.body.classList.toggle('select-mode', isSelectMode);
+            selectModeBtn.classList.toggle('active', isSelectMode);
+            bulkBar.style.display = isSelectMode ? 'flex' : 'none';
+
+            if (!isSelectMode) {
+                selectedItems.clear();
+                cards.forEach(function(card) { card.classList.remove('selected'); });
+                updateBulkCount();
+            }
+        });
+    }
+
+    function exitSelectMode() {
+        isSelectMode = false;
+        document.body.classList.remove('select-mode');
+        if (selectModeBtn) selectModeBtn.classList.remove('active');
+        if (bulkBar) bulkBar.style.display = 'none';
+        selectedItems.clear();
+        cards.forEach(function(card) { card.classList.remove('selected'); });
+        updateBulkCount();
+    }
+
+    function updateBulkCount() {
+        if (bulkCount) bulkCount.textContent = selectedItems.size;
+    }
+
+    // キャンセルボタン
+    var bulkCancelBtn = document.getElementById('bulk-cancel-btn');
+    if (bulkCancelBtn) {
+        bulkCancelBtn.addEventListener('click', exitSelectMode);
+    }
+
+    // 全選択ボタン
+    var bulkSelectAllBtn = document.getElementById('bulk-select-all-btn');
+    if (bulkSelectAllBtn) {
+        bulkSelectAllBtn.addEventListener('click', function() {
+            // 表示中のカード（フィルタOK & セクション非表示でない）を取得
+            var visibleCards = Array.from(cards).filter(function(c) {
+                return !c.hasAttribute('data-filtered-out') && !c.hasAttribute('data-section-hidden');
+            });
+
+            // 全部選択済みなら全解除、そうでなければ全選択
+            var allSelected = visibleCards.every(function(c) {
+                return selectedItems.has(c.getAttribute('data-item-id'));
+            });
+
+            if (allSelected) {
+                visibleCards.forEach(function(c) {
+                    var id = c.getAttribute('data-item-id');
+                    selectedItems.delete(id);
+                    c.classList.remove('selected');
+                });
+            } else {
+                visibleCards.forEach(function(c) {
+                    var id = c.getAttribute('data-item-id');
+                    selectedItems.add(id);
+                    c.classList.add('selected');
+                });
+            }
+            updateBulkCount();
+        });
+    }
+
+    // 一括削除
+    var bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    if (bulkDeleteBtn) {
+        bulkDeleteBtn.addEventListener('click', async function() {
+            if (selectedItems.size === 0) return;
+            if (!confirm(selectedItems.size + '件のアイテムを削除しますか？')) return;
+
+            var result = await apiPost('/api/items/bulk-action', {
+                item_ids: Array.from(selectedItems),
+                action: 'delete'
+            });
+            if (result) {
+                showToast(selectedItems.size + '件を削除しました');
+                window.location.reload();
+            }
+        });
+    }
+
+    // 一括通知停止
+    var bulkArchiveBtn = document.getElementById('bulk-archive-btn');
+    if (bulkArchiveBtn) {
+        bulkArchiveBtn.addEventListener('click', async function() {
+            if (selectedItems.size === 0) return;
+
+            var result = await apiPost('/api/items/bulk-action', {
+                item_ids: Array.from(selectedItems),
+                action: 'archive'
+            });
+            if (result) {
+                showToast(selectedItems.size + '件の通知を停止しました');
+                window.location.reload();
+            }
+        });
+    }
+
+    // 一括対応済み
+    var bulkDoneBtn = document.getElementById('bulk-done-btn');
+    if (bulkDoneBtn) {
+        bulkDoneBtn.addEventListener('click', async function() {
+            if (selectedItems.size === 0) return;
+
+            var result = await apiPost('/api/items/bulk-action', {
+                item_ids: Array.from(selectedItems),
+                action: 'done'
+            });
+            if (result) {
+                showToast(selectedItems.size + '件を対応済みにしました');
+                window.location.reload();
+            }
+        });
+    }
+
+
+    /* ----------------------------------------------------------
+       8. カテゴリタブの横スクロール補助（PC向け）
        ---------------------------------------------------------- */
 
     var categoryTabs = document.querySelector('.category-tabs');
 
-    // マウスホイールで横スクロール
     if (categoryTabs) {
         categoryTabs.addEventListener('wheel', function(e) {
             if (Math.abs(e.deltaY) > 0) {
@@ -237,7 +444,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { passive: false });
     }
 
-    // 左右ボタンでスクロール
     var scrollLeftBtn = document.querySelector('.tab-scroll-left');
     var scrollRightBtn = document.querySelector('.tab-scroll-right');
     var scrollAmount = 120;
@@ -254,6 +460,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
+    /* ----------------------------------------------------------
+       9. URLハッシュによるカテゴリ自動選択
+       ---------------------------------------------------------- */
+
     var hash = decodeURIComponent(location.hash);
     if (hash.startsWith('#cat-')) {
         var catName = hash.substring(5);
@@ -262,4 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
             targetTab.click();
         }
     }
+
+    // 初期表示でセクション分けを適用
+    applyFiltersAndSort();
 });
