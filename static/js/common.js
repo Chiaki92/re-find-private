@@ -243,7 +243,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ----------------------------------------------------------
-    // 3-2. ログアウト処理
+    // 3-2. 「追加する」ボタン：PCではLINEアプリを直接開く
+    // ----------------------------------------------------------
+
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!isMobile) {
+        document.querySelectorAll('[data-line-url-pc]').forEach(function(link) {
+            const pcUrl = link.getAttribute('data-line-url-pc');
+            if (pcUrl) {
+                link.href = pcUrl;
+            }
+        });
+    }
+
+    // ----------------------------------------------------------
+    // 3-3. ログアウト処理
     // ----------------------------------------------------------
 
     const logoutBtn = document.getElementById('logout-btn');

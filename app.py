@@ -159,10 +159,13 @@ LINE_BOT_BASIC_ID = os.environ.get("LINE_BOT_BASIC_ID")
 def inject_global_vars():
     """全テンプレートで使えるグローバル変数を注入する。"""
     bot_url = None
+    bot_url_pc = None
     if LINE_BOT_BASIC_ID:
         bot_url = f"https://line.me/R/ti/p/{LINE_BOT_BASIC_ID}"
+        bot_url_pc = f"line://ti/p/{LINE_BOT_BASIC_ID}"
     return {
-        "line_bot_url": bot_url
+        "line_bot_url": bot_url,
+        "line_bot_url_pc": bot_url_pc,
     }
 
 # ============================================

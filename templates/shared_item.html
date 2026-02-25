@@ -23,7 +23,8 @@
     </span>
     <span class="shared-header-label">共有アイテム</span>
     {% if is_logged_in and line_bot_url %}
-    <a href="{{ line_bot_url }}" target="_blank" class="btn-line-add shared-header-add">
+    <a href="{{ line_bot_url }}" target="_blank" class="btn-line-add shared-header-add"
+       data-line-url="{{ line_bot_url }}" data-line-url-pc="{{ line_bot_url_pc }}">
         <i class="bi bi-chat-dots-fill"></i> 追加する
     </a>
     {% endif %}
