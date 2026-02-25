@@ -165,8 +165,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // 既存のセクションヘッダーを削除
         itemGrid.querySelectorAll('.section-divider').forEach(function(el) { el.remove(); });
 
-        // フィルタ済み（表示対象）のカードを取得
-        var visibleCards = Array.from(cards).filter(function(c) {
+        // フィルタ済み（表示対象）のカードを、現在のDOM順序で取得
+        // ※ cards (静的NodeList) ではなく itemGrid から取得することで、ソート順を維持する
+        var visibleCards = Array.from(itemGrid.querySelectorAll('.item-card')).filter(function(c) {
             return !c.hasAttribute('data-filtered-out');
         });
 
