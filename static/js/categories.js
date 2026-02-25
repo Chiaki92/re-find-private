@@ -138,4 +138,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+
+    /* ----------------------------------------------------------
+       4. AI分類カテゴリの開閉トグル
+       ---------------------------------------------------------- */
+
+    const aiToggle = document.getElementById('ai-categories-toggle');
+    const aiBody = document.getElementById('ai-categories-body');
+    const aiChevron = document.getElementById('ai-categories-chevron');
+
+    if (aiToggle && aiBody && aiChevron) {
+        aiToggle.addEventListener('click', function() {
+            aiBody.classList.toggle('open');
+            aiChevron.classList.toggle('open');
+        });
+    }
 });

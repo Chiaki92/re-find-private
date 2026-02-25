@@ -72,6 +72,32 @@
     「未分類」に移動します
 </p>
 
+<!-- ===== AI分類カテゴリの参照 ===== -->
+<div class="ai-categories-section">
+    <button class="ai-categories-toggle" id="ai-categories-toggle">
+        <i class="bi bi-robot"></i>
+        AI自動分類のカテゴリ一覧
+        <i class="bi bi-chevron-down ai-categories-chevron" id="ai-categories-chevron"></i>
+    </button>
+    <div class="ai-categories-body" id="ai-categories-body">
+        <p class="ai-categories-intro">
+            AIがURLや画像を自動分類するときに使うカテゴリです。
+        </p>
+        <p class="ai-categories-note">
+            カテゴリの追加・削除はAIの自動分類には反映されません。<br>
+            保存後に手動でカテゴリを付け替えることは可能です。
+        </p>
+        <div class="ai-categories-list">
+            {% for name, description in ai_categories.items() %}
+            <div class="ai-category-row">
+                <span class="ai-category-name">{{ name }}</span>
+                <span class="ai-category-desc">{{ description }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
 <!-- 一覧に戻る -->
 <a href="/" class="categories-back">
     <i class="bi bi-arrow-left"></i> 一覧に戻る

@@ -137,6 +137,100 @@
 }
 
 
+/* ===== AI分類カテゴリ参照セクション ===== */
+.ai-categories-section {
+    margin-top: 28px;
+    margin-bottom: 16px;
+}
+
+.ai-categories-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 14px;
+    background-color: var(--color-card);
+    border: 1px solid var(--color-card-border);
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-family: var(--font-body);
+}
+.ai-categories-toggle:hover {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.ai-categories-chevron {
+    margin-left: auto;
+    transition: transform 0.3s;
+}
+.ai-categories-chevron.open {
+    transform: rotate(180deg);
+}
+
+.ai-categories-body {
+    display: none;
+    margin-top: 10px;
+    padding: 14px;
+    background-color: var(--color-card);
+    border: 1px solid var(--color-card-border);
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+}
+.ai-categories-body.open {
+    display: block;
+}
+
+.ai-categories-intro {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin: 0 0 6px;
+    line-height: 1.6;
+}
+
+.ai-categories-note {
+    font-size: 11px;
+    color: #D4C4B0;
+    margin: 0 0 12px;
+    line-height: 1.6;
+}
+
+.ai-categories-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ai-category-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.ai-category-row:last-child {
+    border-bottom: none;
+}
+
+.ai-category-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-primary-dark);
+    white-space: nowrap;
+    min-width: 60px;
+}
+
+.ai-category-desc {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+}
+
+
 /* ===== 一覧に戻るリンク ===== */
 .categories-back {
     display: block;

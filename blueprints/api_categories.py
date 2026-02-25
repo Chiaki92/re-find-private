@@ -6,6 +6,7 @@ from flask import Blueprint, request, render_template, current_app
 
 from extensions import supabase_admin
 from auth_utils import login_required, get_current_user_line_id
+from ai_classifier import CATEGORY_DESCRIPTIONS
 
 api_categories_bp = Blueprint("api_categories", __name__)
 
@@ -30,7 +31,8 @@ def categories_page():
             .execute()
         cat["item_count"] = count_result.count if hasattr(count_result, 'count') else 0
 
-    return render_template("categories.html", categories=categories.data)
+    return render_template("categories.html", categories=categories.data,
+                           ai_categories=CATEGORY_DESCRIPTIONS)
 
 
 @api_categories_bp.route("/api/categories", methods=["POST"])
