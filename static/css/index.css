@@ -52,7 +52,8 @@
     /* 文字が改行されないようにする */
     white-space: nowrap;
     flex-shrink: 0;             /* タブが縮まないようにする */
-    
+    position: relative;         /* バッジの基準位置 */
+
     /* 見た目 */
     background-color: var(--color-tab-bg);
     color: var(--color-text-muted);
@@ -63,6 +64,29 @@
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+}
+
+/* タブ右上の件数バッジ */
+.tab-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    font-size: 9px;
+    font-weight: 700;
+    background-color: var(--color-primary-dark);
+    color: #fff;
+    border-radius: 8px;
+    padding: 0 4px;
+}
+
+/* アクティブタブのバッジは色を反転 */
+.category-tab.active .tab-count {
+    background-color: #fff;
+    color: var(--color-primary-dark);
 }
 
 /* ホバー時 */

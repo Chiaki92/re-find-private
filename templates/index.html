@@ -45,9 +45,9 @@
 <div class="category-tabs-wrapper">
     <div class="category-tabs">
         <!-- 「すべて」は常に先頭。初期状態で active -->
-        <button class="category-tab active" data-category="all">すべて</button>
+        <button class="category-tab active" data-category="all">すべて<span class="tab-count">{{ items | length }}</span></button>
         {% for category in categories %}
-        <button class="category-tab" data-category="{{ category.id }}">{{ category.name }}</button>
+        <button class="category-tab" data-category="{{ category.id }}">{{ category.name }}<span class="tab-count">{{ category.item_count }}</span></button>
         {% endfor %}
     </div>
     <!-- 今日の通知一覧ページへのリンク（LINE緑で視覚的に区別） -->
