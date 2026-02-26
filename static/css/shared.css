@@ -231,3 +231,56 @@
 .shared-nav-link:active {
     opacity: 0.7;
 }
+
+
+/* ===== オーナー向け編集アクションボタン ===== */
+.shared-owner-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+    margin-bottom: 12px;
+}
+
+/* 保存ボタン */
+.shared-save-btn {
+    flex: 2;
+    padding: 12px;
+    background-color: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: var(--color-primary-glow);
+    transition: all 0.2s;
+}
+.shared-save-btn:hover {
+    background-color: var(--color-primary-dark);
+}
+.shared-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 共有リンクコピーボタン */
+.shared-copy-link-btn {
+    flex: 1;
+    padding: 12px;
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.shared-copy-link-btn:hover {
+    background-color: #F8DFD2;
+}
+.shared-copy-link-btn.copied {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    border-color: var(--color-success);
+}

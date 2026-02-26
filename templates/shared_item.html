@@ -33,6 +33,9 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
+{% if is_owner and item %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}">
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -54,20 +57,41 @@
         {% endif %}
 
         <div class="shared-body">
-            <!-- タイトル -->
+            {% if is_owner %}
+            <!-- オーナー向け：タイトル編集 -->
+            <label class="edit-modal-label">タイトル</label>
+            <input id="shared-edit-title" type="text" class="edit-modal-input"
+                   value="{{ item.title or '' }}" placeholder="タイトルを入力">
+
+            <!-- オーナー向け：カテゴリ変更 -->
+            <label class="edit-modal-label">カテゴリ</label>
+            <select id="shared-edit-category" class="edit-modal-select">
+                <option value="">未分類</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if cat.id == item.category_id %}selected{% endif %}>
+                    {{ cat.name }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <!-- オーナー向け：メモ編集 -->
+            <label class="edit-modal-label">メモ</label>
+            <textarea id="shared-edit-memo" class="edit-modal-textarea" rows="3"
+                      placeholder="メモを入力">{{ item.memo or '' }}</textarea>
+            {% else %}
+            <!-- 閲覧者向け：読み取り専用表示 -->
             <h2 class="shared-title">{{ item.title or '（タイトルなし）' }}</h2>
 
-            <!-- カテゴリバッジ -->
             <span class="badge-category" style="margin-bottom: 12px;">
                 {{ item.category_name or '未分類' }}
             </span>
 
-            <!-- メモ（ある場合のみ表示） -->
             {% if item.memo %}
             <div class="shared-memo">
                 <div class="shared-memo-label">メモ</div>
                 <p class="shared-memo-text">{{ item.memo }}</p>
             </div>
+            {% endif %}
             {% endif %}
 
             <!-- 元のURL（URLタイプのみ表示） -->
@@ -85,7 +109,11 @@
     </div>
 
     {% if is_owner %}
-    <!-- ① オーナー向けナビゲーション -->
+    <!-- ① オーナー向け編集アクション -->
+    <div class="shared-owner-actions">
+        <button id="shared-save-btn" class="shared-save-btn" data-item-id="{{ item.id }}">保存</button>
+        <button id="shared-copy-link-btn" class="shared-copy-link-btn">🔗 共有リンクをコピー</button>
+    </div>
     <div class="shared-owner-nav">
         <a href="/?openExternalBrowser=1" class="shared-nav-link">📋 一覧に戻る</a>
         <a href="/?openExternalBrowser=1#cat-{{ item.category_id }}" class="shared-nav-link">📁 「{{ item.category_name }}」を見る</a>
@@ -146,6 +174,52 @@ document.querySelector('.shared-url')?.addEventListener('click', function() {
         url: '{{ item.original_url }}',
         line_user_id: '{{ item.line_user_id }}'
     }));
+});
+</script>
+{% endif %}
+
+{% if item and is_owner %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 保存ボタン
+    const saveBtn = document.getElementById('shared-save-btn');
+    saveBtn.addEventListener('click', async function() {
+        const itemId = this.dataset.itemId;
+        const data = {
+            title: document.getElementById('shared-edit-title').value,
+            category_id: document.getElementById('shared-edit-category').value,
+            memo: document.getElementById('shared-edit-memo').value,
+        };
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = '保存中…';
+
+        const result = await apiPut('/api/items/' + itemId, data);
+        if (result) {
+            showToast('保存しました');
+            window.location.reload();
+        } else {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '保存';
+        }
+    });
+
+    // 共有リンクコピーボタン
+    const copyLinkBtn = document.getElementById('shared-copy-link-btn');
+    copyLinkBtn.addEventListener('click', async function() {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            copyLinkBtn.textContent = '✓ リンクをコピーしました！';
+            copyLinkBtn.classList.add('copied');
+            showToast('共有リンクをコピーしました');
+        } catch (err) {
+            prompt('共有リンクをコピーしてください：', window.location.href);
+        }
+        setTimeout(function() {
+            copyLinkBtn.textContent = '🔗 共有リンクをコピー';
+            copyLinkBtn.classList.remove('copied');
+        }, 3000);
+    });
 });
 </script>
 {% endif %}

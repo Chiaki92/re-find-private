@@ -284,6 +284,17 @@ def shared_item_page(token):
         is_owner = current_user is not None and current_user == owner_id
         is_logged_in = current_user is not None
 
+        # オーナーの場合、カテゴリ一覧を取得（編集用）
+        categories_data = []
+        if is_owner:
+            cats = supabase_admin.table("categories") \
+                .select("id, name") \
+                .eq("line_user_id", current_user) \
+                .order("sort_order") \
+                .order("created_at") \
+                .execute()
+            categories_data = cats.data
+
         # ログイン中の別ユーザーの場合、コピー済みか判定
         already_copied = False
         if is_logged_in and not is_owner:
@@ -300,6 +311,7 @@ def shared_item_page(token):
             is_owner=is_owner,
             is_logged_in=is_logged_in,
             already_copied=already_copied,
+            categories=categories_data,
         )
 
     except Exception as e:
