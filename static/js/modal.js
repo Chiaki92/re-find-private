@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // 3秒後にボタンを元に戻す
             setTimeout(function() {
-                shareBtn.textContent = '🔗 共有リンクを作成';
+                shareBtn.textContent = '🔗 共有リンク';
                 shareBtn.classList.remove('copied');
             }, 3000);
         }

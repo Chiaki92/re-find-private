@@ -112,7 +112,7 @@
     <!-- ① オーナー向け編集アクション -->
     <div class="shared-owner-actions">
         <button id="shared-save-btn" class="shared-save-btn" data-item-id="{{ item.id }}">保存</button>
-        <button id="shared-copy-link-btn" class="shared-copy-link-btn">🔗 共有リンクをコピー</button>
+        <button id="shared-copy-link-btn" class="shared-copy-link-btn">🔗 共有リンク</button>
     </div>
     <div class="shared-owner-nav">
         <a href="/?openExternalBrowser=1" class="shared-nav-link">📋 一覧に戻る</a>
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function() {
             prompt('共有リンクをコピーしてください：', window.location.href);
         }
         setTimeout(function() {
-            copyLinkBtn.textContent = '🔗 共有リンクをコピー';
+            copyLinkBtn.textContent = '🔗 共有リンク';
             copyLinkBtn.classList.remove('copied');
         }, 3000);
     });
