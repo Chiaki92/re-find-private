@@ -9,7 +9,7 @@ import os
 import sys
 import uuid
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from collections import defaultdict
 
 from dotenv import load_dotenv
@@ -251,9 +251,12 @@ def update_item(item, notify_time="21:00"):
         # ── 次回通知日時を計算（ユーザー設定時間を使用） ──
         hour, minute = map(int, notify_time.split(":")[:2])
         days = NOTIFY_INTERVALS.get(new_count, 60)
-        next_at = (datetime.now(JST) + timedelta(days=days)).replace(
-            hour=hour, minute=minute, second=0, microsecond=0
+        now = datetime.now(JST)
+        next_at = datetime.combine(
+            now.date() + timedelta(days=days), time(hour, minute), tzinfo=JST
         )
+        if next_at <= now:
+            next_at += timedelta(days=1)
         supabase.table("items").update({
             "notify_count": new_count,
             "next_notify_at": next_at.isoformat(),

@@ -5,7 +5,7 @@
 import re
 import uuid
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from flask import Blueprint, request, abort, current_app
 from linebot.v3.messaging import (
     ApiClient, MessagingApi, MessagingApiBlob,
@@ -176,9 +176,12 @@ def handle_text_message(event):
         notify_time = user_settings.data[0].get("notify_time", "21:00") if user_settings.data else "21:00"
         parts = notify_time.split(":")
         nt_hour, nt_minute = int(parts[0]), int(parts[1])
-        first_notify_at = (datetime.now(JST) + timedelta(days=1)).replace(
-            hour=nt_hour, minute=nt_minute, second=0, microsecond=0
+        now = datetime.now(JST)
+        first_notify_at = datetime.combine(
+            now.date() + timedelta(days=1), time(nt_hour, nt_minute), tzinfo=JST
         )
+        if first_notify_at <= now:
+            first_notify_at += timedelta(days=1)
 
         if url:
             item_data = {
@@ -331,9 +334,12 @@ def handle_image_message(event):
         notify_time = user_settings.data[0].get("notify_time", "21:00") if user_settings.data else "21:00"
         parts = notify_time.split(":")
         nt_hour, nt_minute = int(parts[0]), int(parts[1])
-        first_notify_at = (datetime.now(JST) + timedelta(days=1)).replace(
-            hour=nt_hour, minute=nt_minute, second=0, microsecond=0
+        now = datetime.now(JST)
+        first_notify_at = datetime.combine(
+            now.date() + timedelta(days=1), time(nt_hour, nt_minute), tzinfo=JST
         )
+        if first_notify_at <= now:
+            first_notify_at += timedelta(days=1)
 
         item_data = {
             "id": item_id,

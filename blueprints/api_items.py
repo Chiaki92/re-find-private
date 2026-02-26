@@ -3,7 +3,7 @@
 # ============================================
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from flask import Blueprint, request, current_app
 
 from extensions import supabase_admin, JST
@@ -40,9 +40,12 @@ def update_item(item_id):
             .execute()
         notify_time = settings_res.data[0].get("notify_time", "21:00") if settings_res.data else "21:00"
         hour, minute = map(int, notify_time.split(":")[:2])
-        next_at = (datetime.now(JST) + timedelta(days=1)).replace(
-            hour=hour, minute=minute, second=0, microsecond=0
+        now = datetime.now(JST)
+        next_at = datetime.combine(
+            now.date() + timedelta(days=1), time(hour, minute), tzinfo=JST
         )
+        if next_at <= now:
+            next_at += timedelta(days=1)
         update_data["next_notify_at"] = next_at.isoformat()
 
     try:
@@ -181,9 +184,12 @@ def copy_item():
         parts = notify_time.split(":")
         nt_hour, nt_minute = int(parts[0]), int(parts[1])
 
-        first_notify_at = (datetime.now(JST) + timedelta(days=1)).replace(
-            hour=nt_hour, minute=nt_minute, second=0, microsecond=0
+        now = datetime.now(JST)
+        first_notify_at = datetime.combine(
+            now.date() + timedelta(days=1), time(nt_hour, nt_minute), tzinfo=JST
         )
+        if first_notify_at <= now:
+            first_notify_at += timedelta(days=1)
 
         # 4. カテゴリ名でマッチング
         category_id = None
