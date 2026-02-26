@@ -216,6 +216,13 @@
     margin-bottom: 14px;
 }
 
+/* 通知バッジ（回数 + 次回通知日） */
+.edit-modal-notify-info {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
 /* 保存日 */
 .edit-modal-date {
     font-size: 12px;

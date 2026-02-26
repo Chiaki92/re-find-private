@@ -27,6 +27,30 @@ let currentItemId = null;
 
 
 /* ----------------------------------------------------------
+   0.5. 次回通知日の相対表示（サーバー側 timeuntil フィルターと同等）
+   ---------------------------------------------------------- */
+function timeuntil(isoStr) {
+    if (!isoStr) return '';
+    const target = new Date(isoStr);
+    // JST の「今日」を算出
+    const now = new Date();
+    const jstOffset = 9 * 60;
+    const jstNow = new Date(now.getTime() + (jstOffset + now.getTimezoneOffset()) * 60000);
+    const jstTarget = new Date(target.getTime() + (jstOffset + target.getTimezoneOffset()) * 60000);
+
+    const todayStart = new Date(jstNow.getFullYear(), jstNow.getMonth(), jstNow.getDate());
+    const targetStart = new Date(jstTarget.getFullYear(), jstTarget.getMonth(), jstTarget.getDate());
+    const days = Math.round((targetStart - todayStart) / 86400000);
+
+    if (days <= 0) return '今日';
+    if (days === 1) return '明日';
+    if (days < 30) return `${days}日後`;
+    if (days < 365) return `${Math.floor(days / 30)}ヶ月後`;
+    return `${Math.floor(days / 365)}年後`;
+}
+
+
+/* ----------------------------------------------------------
    1. モーダルを開く
    
    index.js のカードクリックから呼ばれる。
@@ -83,6 +107,24 @@ function openModal(item) {
         urlLink.textContent = item.original_url;
     } else {
         urlSection.style.display = 'none';
+    }
+
+    // --- 通知バッジを設定 ---
+    const notifyInfo = document.getElementById('modal-notify-info');
+    if (item.status === 'pending') {
+        notifyInfo.style.display = '';
+        document.getElementById('modal-notify-count').textContent =
+            `通知 ${item.notify_count || 0}/6回`;
+
+        const nextEl = document.getElementById('modal-notify-next');
+        if (item.next_notify_at) {
+            nextEl.style.display = '';
+            nextEl.textContent = `次回 ${timeuntil(item.next_notify_at)}`;
+        } else {
+            nextEl.style.display = 'none';
+        }
+    } else {
+        notifyInfo.style.display = 'none';
     }
 
     // --- 保存日を設定 ---
