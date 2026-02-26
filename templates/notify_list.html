@@ -121,7 +121,11 @@
     <div class="edit-modal-content">
 
         <div class="edit-modal-header">
-            <button id="modal-done-btn" class="edit-modal-done-btn">✓ 対応済みにする</button>
+            <div class="edit-modal-actions">
+                <button id="modal-done-btn" class="edit-modal-done-btn">✓ 対応済み</button>
+                <button id="modal-archive-btn" class="edit-modal-archive-btn">🔕 通知停止</button>
+                <button id="modal-share-btn" class="edit-modal-share-btn">🔗 共有リンク作成</button>
+            </div>
             <button id="modal-close-btn" class="edit-modal-close-btn">✕</button>
         </div>
 
@@ -148,8 +152,6 @@
             </div>
 
             <div id="modal-date" class="edit-modal-date"></div>
-
-            <button id="modal-share-btn" class="edit-modal-share-btn">🔗 共有リンクを作成</button>
         </div>
 
         <div class="edit-modal-footer">
@@ -174,11 +176,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var cards = document.querySelectorAll('.item-card');
 
+    /* --- カテゴリセクション見出しの挿入・除去 --- */
+    function removeCategoryHeaders() {
+        itemGrid.querySelectorAll('.category-section-header').forEach(function(el) {
+            el.remove();
+        });
+    }
+
+    function insertCategoryHeaders() {
+        var currentCat = null;
+        var children = Array.from(itemGrid.querySelectorAll('.item-card'));
+        children.forEach(function(card) {
+            var cat = card.getAttribute('data-category-name') || '未分類';
+            if (cat !== currentCat) {
+                currentCat = cat;
+                // カテゴリに属するカード数をカウント
+                var count = children.filter(function(c) {
+                    return (c.getAttribute('data-category-name') || '未分類') === cat;
+                }).length;
+                var header = document.createElement('div');
+                header.className = 'category-section-header';
+                header.textContent = cat + '（' + count + '件）';
+                card.parentNode.insertBefore(header, card);
+            }
+        });
+    }
+
     /* --- ソート --- */
     if (sortSelect && itemGrid) {
         sortSelect.addEventListener('change', function() {
             var sortKey = this.value;
             var cardArray = Array.from(cards);
+
+            removeCategoryHeaders();
 
             cardArray.sort(function(a, b) {
                 switch (sortKey) {
@@ -204,6 +234,11 @@ document.addEventListener('DOMContentLoaded', function() {
             cardArray.forEach(function(card) {
                 itemGrid.appendChild(card);
             });
+
+            // カテゴリ順のときだけセクション見出しを挿入
+            if (sortKey === 'category') {
+                insertCategoryHeaders();
+            }
         });
 
         // 初期表示でカテゴリ順ソートを適用

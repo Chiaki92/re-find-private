@@ -181,13 +181,16 @@ def build_message(items, notify_date_str=None):
                         lines.append(f"    {share_url}")
                 lines.append("")
         else:
-            # === 目次形式（件数が多い場合） ===
+            # === 目次形式（件数が多い場合・カテゴリ別） ===
             lines.append(f"📬 {len(normal_items)}件の情報があります\n")
-            lines.append("＜目次＞")
-            for i, item in enumerate(normal_items, 1):
-                title = item.get("title") or "（タイトルなし）"
-                lines.append(f"{i}. {title}")
-            lines.append("")
+            num = 1
+            for category, cat_items in _group_by_category(normal_items).items():
+                lines.append(f"📁 {category}（{len(cat_items)}件）")
+                for item in cat_items:
+                    title = item.get("title") or "（タイトルなし）"
+                    lines.append(f"  {num}. {title}")
+                    num += 1
+                lines.append("")
 
     # ── 最終通知ブロック ──
     if final_items:
