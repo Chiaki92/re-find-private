@@ -109,7 +109,20 @@
     </div>
 
     {% if is_owner %}
-    <!-- ① オーナー向け編集アクション -->
+    <!-- ① オーナー向けステータス変更 -->
+    <div class="shared-status-actions">
+        <button id="shared-done-btn" class="edit-modal-done-btn{% if item.status == 'done' %} is-done{% endif %}"
+                data-item-id="{{ item.id }}">
+            {% if item.status == 'done' %}↩ 未対応に戻す{% else %}✓ 対応済み{% endif %}
+        </button>
+        <button id="shared-archive-btn" class="edit-modal-archive-btn"
+                data-item-id="{{ item.id }}"
+                {% if item.status == 'done' %}style="display:none"{% endif %}>
+            {% if item.status == 'archived' %}🔔 通知再開{% else %}🔕 通知停止{% endif %}
+        </button>
+    </div>
+
+    <!-- オーナー向け編集アクション -->
     <div class="shared-owner-actions">
         <button id="shared-save-btn" class="shared-save-btn" data-item-id="{{ item.id }}">保存</button>
         <button id="shared-copy-link-btn" class="shared-copy-link-btn">🔗 共有リンク</button>
@@ -201,6 +214,34 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             saveBtn.disabled = false;
             saveBtn.textContent = '保存';
+        }
+    });
+
+    // 対応済みボタン
+    const doneBtn = document.getElementById('shared-done-btn');
+    doneBtn.addEventListener('click', async function() {
+        const itemId = this.dataset.itemId;
+        const isDone = doneBtn.classList.contains('is-done');
+        const newStatus = isDone ? 'pending' : 'done';
+
+        const result = await apiPut('/api/items/' + itemId, { status: newStatus });
+        if (result) {
+            showToast(newStatus === 'done' ? '対応済みにしました' : '未対応に戻しました');
+            window.location.reload();
+        }
+    });
+
+    // 通知停止/再開ボタン
+    const archiveBtn = document.getElementById('shared-archive-btn');
+    archiveBtn.addEventListener('click', async function() {
+        const itemId = this.dataset.itemId;
+        const isArchived = archiveBtn.textContent.includes('通知再開');
+        const newStatus = isArchived ? 'pending' : 'archived';
+
+        const result = await apiPut('/api/items/' + itemId, { status: newStatus });
+        if (result) {
+            showToast(isArchived ? '通知を再開しました' : '通知を停止しました');
+            window.location.reload();
         }
     });
 
