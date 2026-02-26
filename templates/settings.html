@@ -88,6 +88,10 @@
             style="background-color: #E87461;">
         今すぐ通知を送信
     </button>
+    <button id="demo-notify-3days-btn" class="btn-refind-primary settings-save-btn"
+            style="background-color: #5B8CDB; margin-top: 8px;">
+        3日後の通知を送信
+    </button>
     <p id="demo-result" class="settings-description" style="margin-top: 8px; display: none;"></p>
 </div>
 <!-- ===== /デモ通知 ===== -->
@@ -133,29 +137,38 @@ document.addEventListener('DOMContentLoaded', function () {
     const demoBtn = document.getElementById('demo-notify-btn');
     const demoResult = document.getElementById('demo-result');
 
-    demoBtn.addEventListener('click', async function () {
-        demoBtn.disabled = true;
-        demoBtn.textContent = '送信中...';
-        demoResult.style.display = 'none';
+    function setupDemoBtn(btn, payload, label) {
+        btn.addEventListener('click', async function () {
+            btn.disabled = true;
+            btn.textContent = '送信中...';
+            demoResult.style.display = 'none';
 
-        const result = await apiPost('/api/demo/notify', {});
+            const result = await apiPost('/api/demo/notify', payload);
 
-        if (result && result.ok) {
-            demoResult.textContent = result.count + '件の通知を送信しました';
-            demoResult.style.color = 'var(--color-primary)';
-            demoResult.style.display = 'block';
-            showToast(result.count + '件の通知を送信しました');
-        } else {
-            const msg = (result && result.error) || '送信に失敗しました';
-            demoResult.textContent = msg;
-            demoResult.style.color = '#D94F4F';
-            demoResult.style.display = 'block';
-            showToast(msg, 'error');
-        }
+            if (result && result.ok) {
+                demoResult.textContent = result.count + '件の通知を送信しました';
+                demoResult.style.color = 'var(--color-primary)';
+                demoResult.style.display = 'block';
+                showToast(result.count + '件の通知を送信しました');
+            } else {
+                const msg = (result && result.error) || '送信に失敗しました';
+                demoResult.textContent = msg;
+                demoResult.style.color = '#D94F4F';
+                demoResult.style.display = 'block';
+                showToast(msg, 'error');
+            }
 
-        demoBtn.disabled = false;
-        demoBtn.textContent = '今すぐ通知を送信';
-    });
+            btn.disabled = false;
+            btn.textContent = label;
+        });
+    }
+
+    setupDemoBtn(demoBtn, {}, '今すぐ通知を送信');
+    setupDemoBtn(
+        document.getElementById('demo-notify-3days-btn'),
+        { offset_days: 3 },
+        '3日後の通知を送信'
+    );
 });
 </script>
 {% endblock %}

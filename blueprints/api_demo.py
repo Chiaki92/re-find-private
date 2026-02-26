@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
-from flask import Blueprint, current_app
+from flask import Blueprint, current_app, request
 
 from extensions import supabase_admin, line_configuration
 from auth_utils import login_required, get_current_user_line_id
@@ -47,24 +47,30 @@ def demo_notify():
     line_user_id = get_current_user_line_id()
 
     try:
-        # 1. 今日が通知日の pending アイテムを取得
+        # 1. 対象日の pending アイテムを取得
+        data = request.get_json(silent=True) or {}
+        offset_days = int(data.get("offset_days", 0))
+
         now_jst = datetime.now(JST)
         today_start = now_jst.replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow_start = today_start + timedelta(days=1)
+        target_start = today_start + timedelta(days=offset_days)
+        target_end = target_start + timedelta(days=1)
 
         res = supabase_admin.table("items") \
             .select("id, line_user_id, title, notify_count, next_notify_at, created_at, categories(name)") \
             .eq("line_user_id", line_user_id) \
             .eq("status", "pending") \
             .is_("deleted_at", "null") \
-            .gte("next_notify_at", today_start.isoformat()) \
-            .lt("next_notify_at", tomorrow_start.isoformat()) \
+            .gte("next_notify_at", target_start.isoformat()) \
+            .lt("next_notify_at", target_end.isoformat()) \
             .order("created_at", desc=True) \
             .execute()
 
         items = res.data or []
         if not items:
-            return {"ok": False, "error": "今日が通知日のアイテムがありません"}, 404
+            msg = "今日が通知日のアイテムがありません" if offset_days == 0 \
+                else f"{offset_days}日後が通知日のアイテムがありません"
+            return {"ok": False, "error": msg}, 404
 
         # カテゴリ名を整形
         for item in items:
