@@ -52,7 +52,7 @@ NOTIFY_INTERVALS = {
 MAX_NOTIFY_COUNT = 6  # この回数に達したら status を 'archived' に変更
 
 # この件数以下なら詳細テキスト、超えたら目次形式でLINEに送る
-NOTIFY_DETAIL_LIMIT = 5
+NOTIFY_DETAIL_LIMIT = 3
 
 logging.basicConfig(
     level=logging.INFO,
@@ -187,8 +187,9 @@ def build_message(items, notify_date_str=None):
             for category, cat_items in _group_by_category(normal_items).items():
                 lines.append(f"📁 {category}（{len(cat_items)}件）")
                 for item in cat_items:
+                    count = item["notify_count"] + 1
                     title = item.get("title") or "（タイトルなし）"
-                    lines.append(f"  {num}. {title}")
+                    lines.append(f"  {num}. {title}｜{count}回目")
                     num += 1
                 lines.append("")
 

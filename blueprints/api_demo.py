@@ -33,7 +33,7 @@ BASE_SHARE_URL = f"{BASE_URL}/share"
 WEB_URL = f"{BASE_URL}/?openExternalBrowser=1"
 NOTIFY_INTERVALS = {0: 1, 1: 3, 2: 7, 3: 14, 4: 30, 5: 60}
 MAX_NOTIFY_COUNT = 6
-NOTIFY_DETAIL_LIMIT = 5
+NOTIFY_DETAIL_LIMIT = 3
 
 
 # ============================================
@@ -199,8 +199,9 @@ def _build_message(items, notify_date_str):
             lines.append(f"\U0001f4ec {len(normal_items)}件の情報があります\n")
             lines.append("＜目次＞")
             for i, item in enumerate(normal_items, 1):
+                count = item["notify_count"] + 1
                 title = item.get("title") or "（タイトルなし）"
-                lines.append(f"{i}. {title}")
+                lines.append(f"{i}. {title}｜{count}回目")
             lines.append("")
 
     if final_items:
