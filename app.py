@@ -199,6 +199,7 @@ def index():
         count_result = supabase_admin.table("items") \
             .select("id", count="exact") \
             .eq("category_id", cat["id"]) \
+            .eq("status", "pending") \
             .is_("deleted_at", "null") \
             .execute()
         cat["item_count"] = count_result.count if hasattr(count_result, 'count') else 0
@@ -216,10 +217,13 @@ def index():
         item["category_name"] = cat["name"] if cat else "未分類"
         items_list.append(item)
 
+    pending_count = sum(1 for item in items_list if item.get("status") == "pending")
+
     return render_template("index.html",
         categories=categories.data,
         items=items_list,
         items_json=json.dumps(items_list, default=str),
+        pending_count=pending_count,
     )
 
 

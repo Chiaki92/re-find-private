@@ -29,6 +29,7 @@ def categories_page():
         count_result = supabase_admin.table("items") \
             .select("id", count="exact") \
             .eq("category_id", cat["id"]) \
+            .eq("status", "pending") \
             .is_("deleted_at", "null") \
             .execute()
         cat["item_count"] = count_result.count if hasattr(count_result, 'count') else 0

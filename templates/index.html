@@ -46,7 +46,7 @@
     <button class="tab-scroll-btn tab-scroll-left" aria-label="左へスクロール">‹</button>
     <div class="category-tabs">
         <!-- 「すべて」は常に先頭。初期状態で active -->
-        <button class="category-tab active" data-category="all">すべて<span class="tab-count">{{ items | length }}</span></button>
+        <button class="category-tab active" data-category="all">すべて<span class="tab-count">{{ pending_count }}</span></button>
         {% for category in categories %}
         <button class="category-tab" data-category="{{ category.id }}">{{ category.name }}<span class="tab-count">{{ category.item_count }}</span></button>
         {% endfor %}
@@ -78,6 +78,19 @@
     <button id="select-mode-btn" class="select-mode-btn" title="選択モード">
         <i class="bi bi-check2-square"></i>
     </button>
+</div>
+
+{# ----------------------------------------------------------
+   1.6. ステータス別カウント表示
+
+   現在のフィルタに該当するアイテムのうち、
+   通知中 / 通知停止 / 対応済み がそれぞれ何件あるか表示。
+   index.js の updateStatusCounts() が件数を動的に更新する。
+   ---------------------------------------------------------- #}
+<div class="status-count-bar" id="status-count-bar">
+    <span class="status-count-item status-count-pending">通知中 <span id="count-pending">0</span></span>
+    <span class="status-count-item status-count-archived">通知停止 <span id="count-archived">0</span></span>
+    <span class="status-count-item status-count-done">対応済み <span id="count-done">0</span></span>
 </div>
 
 {# ----------------------------------------------------------
