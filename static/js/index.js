@@ -143,7 +143,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- Step C: セクション分けを挿入 ---
         insertSectionDividers();
 
-        // --- Step D: 空の状態を更新 ---
+        // --- Step D: ステータス別カウントを更新 ---
+        updateStatusCounts();
+
+        // --- Step E: 空の状態を更新 ---
         updateEmptyState();
     }
 
@@ -282,6 +285,24 @@ document.addEventListener('DOMContentLoaded', function() {
     /* ----------------------------------------------------------
        6. ヘルパー関数
        ---------------------------------------------------------- */
+
+    function updateStatusCounts() {
+        var pending = 0, archived = 0, done = 0;
+        cards.forEach(function(card) {
+            if (card.hasAttribute('data-filtered-out')) return;
+            var status = card.getAttribute('data-status');
+            if (status === 'pending') pending++;
+            else if (status === 'archived') archived++;
+            else if (status === 'done') done++;
+        });
+        var countPending = document.getElementById('count-pending');
+        var countArchived = document.getElementById('count-archived');
+        var countDone = document.getElementById('count-done');
+        if (countPending) countPending.textContent = pending;
+        if (countArchived) countArchived.textContent = archived;
+        if (countDone) countDone.textContent = done;
+    }
+
 
     function updateEmptyState() {
         var emptyState = document.querySelector('.empty-state');

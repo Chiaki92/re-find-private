@@ -204,6 +204,46 @@
 
 
 /* ----------------------------------------------------------
+   1.6. ステータス別カウントバー
+
+   検索バーとカード一覧の間に、通知中 / 通知停止 / 対応済み の
+   件数をバッジで横並びに表示する。
+   ---------------------------------------------------------- */
+
+.status-count-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 2px 0 4px;
+}
+
+.status-count-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+}
+
+.status-count-pending {
+    background: #E8F4E8;
+    color: #4A7A4A;
+}
+
+.status-count-archived {
+    background: #FFF3E0;
+    color: #C08830;
+}
+
+.status-count-done {
+    background: var(--color-tab-bg);
+    color: var(--color-text-muted);
+}
+
+
+/* ----------------------------------------------------------
    2. タイルカード一覧（CSS Grid）
    
    カードを2列で並べる。タブレット以上では3列、PCでは4列。
