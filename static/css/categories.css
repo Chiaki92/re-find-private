@@ -102,18 +102,18 @@
 .move-buttons {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
     flex-shrink: 0;
 }
 
 .move-btn {
     background: none;
     border: 1px solid var(--color-card-border);
-    border-radius: 6px;
-    padding: 2px 6px;
+    border-radius: 4px;
+    padding: 1px 4px;
     cursor: pointer;
     color: var(--color-text-muted);
-    font-size: 12px;
+    font-size: 10px;
     line-height: 1;
     transition: all 0.15s;
     display: flex;
@@ -133,7 +133,7 @@
 }
 
 .move-buttons-spacer {
-    width: 28px;
+    width: 22px;
     flex-shrink: 0;
 }
 
