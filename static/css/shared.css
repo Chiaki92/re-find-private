@@ -233,16 +233,19 @@
 }
 
 
-/* ===== オーナー向けステータス変更ボタン ===== */
+/* ===== オーナー向けステータス変更ボタン（ヘッダー直下） ===== */
 .shared-status-actions {
     display: flex;
     gap: 8px;
-    margin-top: 20px;
+    margin-bottom: 16px;
 }
 .shared-status-actions .edit-modal-done-btn,
 .shared-status-actions .edit-modal-archive-btn {
     padding: 8px 16px;
     font-size: 13px;
+}
+.shared-status-actions .shared-copy-link-btn {
+    margin-left: auto;
 }
 
 

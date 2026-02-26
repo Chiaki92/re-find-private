@@ -42,6 +42,23 @@
 <div class="shared-container">
 
     {% if item %}
+
+    {% if is_owner %}
+    <!-- オーナー向けステータス変更（ヘッダー直下） -->
+    <div class="shared-status-actions">
+        <button id="shared-done-btn" class="edit-modal-done-btn{% if item.status == 'done' %} is-done{% endif %}"
+                data-item-id="{{ item.id }}">
+            {% if item.status == 'done' %}↩ 未対応に戻す{% else %}✓ 対応済み{% endif %}
+        </button>
+        <button id="shared-archive-btn" class="edit-modal-archive-btn"
+                data-item-id="{{ item.id }}"
+                {% if item.status == 'done' %}style="display:none"{% endif %}>
+            {% if item.status == 'archived' %}🔔 通知再開{% else %}🔕 通知停止{% endif %}
+        </button>
+        <button id="shared-copy-link-btn" class="shared-copy-link-btn">🔗 共有リンク</button>
+    </div>
+    {% endif %}
+
     <!-- ===== アイテムが存在する場合 ===== -->
     <div class="shared-card">
 
@@ -109,23 +126,9 @@
     </div>
 
     {% if is_owner %}
-    <!-- ① オーナー向けステータス変更 -->
-    <div class="shared-status-actions">
-        <button id="shared-done-btn" class="edit-modal-done-btn{% if item.status == 'done' %} is-done{% endif %}"
-                data-item-id="{{ item.id }}">
-            {% if item.status == 'done' %}↩ 未対応に戻す{% else %}✓ 対応済み{% endif %}
-        </button>
-        <button id="shared-archive-btn" class="edit-modal-archive-btn"
-                data-item-id="{{ item.id }}"
-                {% if item.status == 'done' %}style="display:none"{% endif %}>
-            {% if item.status == 'archived' %}🔔 通知再開{% else %}🔕 通知停止{% endif %}
-        </button>
-    </div>
-
     <!-- オーナー向け編集アクション -->
     <div class="shared-owner-actions">
         <button id="shared-save-btn" class="shared-save-btn" data-item-id="{{ item.id }}">保存</button>
-        <button id="shared-copy-link-btn" class="shared-copy-link-btn">🔗 共有リンク</button>
     </div>
     <div class="shared-owner-nav">
         <a href="/?openExternalBrowser=1" class="shared-nav-link">📋 一覧に戻る</a>
