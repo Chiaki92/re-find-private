@@ -257,7 +257,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ----------------------------------------------------------
-    // 3-3. ログアウト処理
+    // 3-3. ページ上部に戻るボタン
+    // ----------------------------------------------------------
+
+    const scrollTopBtn = document.getElementById('scroll-top-btn');
+    if (scrollTopBtn) {
+        window.addEventListener('scroll', function() {
+            if (window.scrollY > 200) {
+                scrollTopBtn.classList.add('visible');
+            } else {
+                scrollTopBtn.classList.remove('visible');
+            }
+        });
+
+        scrollTopBtn.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+
+    // ----------------------------------------------------------
+    // 3-4. ログアウト処理
     // ----------------------------------------------------------
 
     const logoutBtn = document.getElementById('logout-btn');
