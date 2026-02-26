@@ -101,7 +101,7 @@ function openModal(item) {
         doneBtn.textContent = '↩ 未対応に戻す';
         doneBtn.classList.add('is-done');
     } else {
-        doneBtn.textContent = '✓ 対応済みにする';
+        doneBtn.textContent = '✓ 対応済み';
         doneBtn.classList.remove('is-done');
     }
 
@@ -109,10 +109,10 @@ function openModal(item) {
     const archiveBtn = document.getElementById('modal-archive-btn');
     if (item.status === 'pending') {
         archiveBtn.style.display = '';
-        archiveBtn.textContent = '🔕 通知を停止する';
+        archiveBtn.textContent = '🔕 通知停止';
     } else if (item.status === 'archived') {
         archiveBtn.style.display = '';
-        archiveBtn.textContent = '🔔 通知を再開する';
+        archiveBtn.textContent = '🔔 通知再開';
     } else {
         // done のときは非表示
         archiveBtn.style.display = 'none';
@@ -120,7 +120,7 @@ function openModal(item) {
 
     // --- 共有リンクボタンをリセット ---
     const shareBtn = document.getElementById('modal-share-btn');
-    shareBtn.textContent = '🔗 共有リンクを作成';
+    shareBtn.textContent = '🔗 共有リンク';
     shareBtn.classList.remove('copied');
 
     // --- モーダルを表示 ---
