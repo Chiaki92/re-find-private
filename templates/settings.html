@@ -86,11 +86,11 @@
     </p>
     <button id="demo-notify-btn" class="btn-refind-primary settings-save-btn"
             style="background-color: #E87461;">
-        今すぐ通知を送信
+        今日の通知を送信
     </button>
-    <button id="demo-notify-3days-btn" class="btn-refind-primary settings-save-btn"
+    <button id="demo-notify-tomorrow-btn" class="btn-refind-primary settings-save-btn"
             style="background-color: #5B8CDB; margin-top: 8px;">
-        3日後の通知を送信
+        明日の通知を送信
     </button>
     <p id="demo-result" class="settings-description" style="margin-top: 8px; display: none;"></p>
 </div>
@@ -163,11 +163,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    setupDemoBtn(demoBtn, {}, '今すぐ通知を送信');
+    setupDemoBtn(demoBtn, {}, '今日の通知を送信');
     setupDemoBtn(
-        document.getElementById('demo-notify-3days-btn'),
-        { offset_days: 3 },
-        '3日後の通知を送信'
+        document.getElementById('demo-notify-tomorrow-btn'),
+        { offset_days: 1 },
+        '明日の通知を送信'
     );
 });
 </script>

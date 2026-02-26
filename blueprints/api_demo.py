@@ -69,6 +69,7 @@ def demo_notify():
         items = res.data or []
         if not items:
             msg = "今日が通知日のアイテムがありません" if offset_days == 0 \
+                else "明日が通知日のアイテムがありません" if offset_days == 1 \
                 else f"{offset_days}日後が通知日のアイテムがありません"
             return {"ok": False, "error": msg}, 404
 
