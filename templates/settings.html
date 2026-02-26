@@ -26,9 +26,9 @@
 <div class="settings-section">
     <label class="settings-label" for="notify-time">
         <i class="bi bi-clock"></i> 通知時間
+        <button id="info-help-btn" class="settings-help-btn" type="button" aria-label="リマインド通知の説明を表示">?</button>
     </label>
     <p class="settings-description">
-        通知は 1日後・3日後・7日後・14日後・30日後・60日後 の全6回お届けします。<br>
         通知すべきアイテムがある日は、この時間に届きます。
     </p>
     {# ===== 時間セレクトボックス =====
@@ -96,6 +96,31 @@
 <a href="/" class="settings-back">
     <i class="bi bi-arrow-left"></i> 一覧に戻る
 </a>
+
+{# ===== リマインド通知の説明ポップアップ（ボトムシート） ===== #}
+<div id="info-popup" class="info-popup-overlay" style="display: none;">
+    <div class="info-popup-content">
+        <div class="info-popup-handle"><div class="info-popup-handle-bar"></div></div>
+        <div class="info-popup-header">
+            <h3 class="info-popup-title">🔔 リマインド通知の仕組み</h3>
+            <button id="info-close-btn" class="info-popup-close-btn" type="button">✕</button>
+        </div>
+        <div class="info-popup-body">
+            <div class="info-card">
+                <p class="info-text">
+                    保存した情報は、時間が経つほど埋もれていきます。
+                    Re:find は<strong class="info-highlight">忘却曲線の原理</strong>を応用し、
+                    忘れかけたタイミングで通知を送ることで
+                    <strong class="info-highlight">情報を再発見</strong>できるようにします。
+                </p>
+            </div>
+            <div class="info-card">
+                <h4 class="info-subtitle">通知スケジュール（全6回・最大60日間）</h4>
+                <div id="info-timeline"></div>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
