@@ -225,6 +225,7 @@
     font-weight: 600;
     padding: 3px 10px;
     border-radius: 12px;
+    cursor: pointer;
 }
 
 .status-count-pending {

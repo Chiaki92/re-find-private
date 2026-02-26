@@ -304,6 +304,40 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
+    /* ----------------------------------------------------------
+       6.1. ステータスバッジクリック → 該当セクションにジャンプ
+       ---------------------------------------------------------- */
+
+    function scrollToSection(sectionId) {
+        if (sectionId === 'pending') {
+            // pending にはセクションヘッダーがないので、グリッド先頭にスクロール
+            var firstPending = itemGrid.querySelector('.item-card[data-status="pending"]:not([data-filtered-out])');
+            if (firstPending) {
+                firstPending.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+
+        var divider = itemGrid.querySelector('.section-divider[data-section="' + sectionId + '"]');
+        if (!divider) return;
+
+        // 折りたたまれていたら展開する
+        if (sectionCollapsed[sectionId]) {
+            toggleSection(sectionId);
+        }
+
+        divider.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    var badgePending = document.querySelector('.status-count-pending');
+    var badgeArchived = document.querySelector('.status-count-archived');
+    var badgeDone = document.querySelector('.status-count-done');
+
+    if (badgePending) badgePending.addEventListener('click', function() { scrollToSection('pending'); });
+    if (badgeArchived) badgeArchived.addEventListener('click', function() { scrollToSection('archived'); });
+    if (badgeDone) badgeDone.addEventListener('click', function() { scrollToSection('done'); });
+
+
     function updateEmptyState() {
         var emptyState = document.querySelector('.empty-state');
         if (!emptyState) return;
