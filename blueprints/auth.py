@@ -43,6 +43,7 @@ def _create_default_data_if_needed(line_user_id):
         supabase_admin.table("categories").insert({
             "line_user_id": line_user_id,
             "name": "未分類",
+            "sort_order": 999999,
         }).execute()
 
     # --- user_settings がなければデフォルト作成 ---
