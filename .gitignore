@@ -11,3 +11,4 @@ venv/
 # 開発用一時ファイル（本番前に削除）
 _test_webhook.py
 _test_image.png
+cookies.txt
